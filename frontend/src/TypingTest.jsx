@@ -47,10 +47,15 @@ function TypingTest() {
       const firstChar = textDisplayRef.current.querySelector('.char');
       if (firstChar) {
         const rect = firstChar.getBoundingClientRect();
-        const fontSize = parseFloat(getComputedStyle(textDisplayRef.current).fontSize);
-        // Convert pixel width to em units
-        const widthInEm = rect.width / fontSize;
-        setCharWidth(widthInEm);
+        const computedStyle = getComputedStyle(textDisplayRef.current);
+        if (computedStyle && computedStyle.fontSize) {
+          const fontSize = parseFloat(computedStyle.fontSize);
+          // Convert pixel width to em units, fallback to SCROLL_SPEED_MULTIPLIER if invalid
+          const widthInEm = rect.width / fontSize;
+          if (!isNaN(widthInEm) && widthInEm > 0) {
+            setCharWidth(widthInEm);
+          }
+        }
       }
     }
   }, [text]); // Recalculate when text changes
