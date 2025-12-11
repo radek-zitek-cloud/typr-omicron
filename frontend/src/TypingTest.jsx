@@ -4,7 +4,6 @@ import wordsData from './words.json';
 
 // Configuration constants
 const INACTIVITY_TIMEOUT_MS = 5000; // 5 seconds
-const SCROLL_START_THRESHOLD = 20; // Start scrolling after this many characters
 const SCROLL_SPEED_MULTIPLIER = 0.6; // Controls how fast the text scrolls
 
 function TypingTest() {
@@ -24,7 +23,6 @@ function TypingTest() {
   const [events, setEvents] = useState([]);
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
-  const [scrollOffset, setScrollOffset] = useState(0);
   const inactivityTimerRef = useRef(null);
   const sessionStartTimeRef = useRef(null);
   
@@ -144,19 +142,12 @@ function TypingTest() {
       if (userInput.length > 0) {
         setUserInput(prev => prev.slice(0, -1));
         setCurrentIndex(prev => prev - 1);
-        // Adjust scroll offset for backspace
-        setScrollOffset(prev => Math.max(0, prev - 1));
       }
     } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       // Only process printable characters without modifiers
       e.preventDefault();
       setUserInput(prev => prev + e.key);
       setCurrentIndex(prev => prev + 1);
-      
-      // Adjust scroll offset to keep caret centered
-      if (currentIndex > SCROLL_START_THRESHOLD) {
-        setScrollOffset(prev => prev + 1);
-      }
 
       // Check if we've reached the end of the text
       if (currentIndex >= text.length - 1) {
@@ -224,7 +215,6 @@ function TypingTest() {
     setEvents([]);
     setSessionActive(false);
     setSessionStarted(false);
-    setScrollOffset(0);
     sessionStartTimeRef.current = null;
     
     if (inactivityTimerRef.current) {
@@ -253,7 +243,8 @@ function TypingTest() {
         <div 
           className="text-display" 
           style={{
-            transform: `translateX(-${scrollOffset * SCROLL_SPEED_MULTIPLIER}em)`
+            transform: `translateX(${-currentIndex * SCROLL_SPEED_MULTIPLIER}em)`,
+            marginLeft: '50%'
           }}
         >
           {text.split('').map((char, index) => renderCharacter(char, index))}
