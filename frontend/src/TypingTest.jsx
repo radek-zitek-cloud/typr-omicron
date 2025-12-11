@@ -3,7 +3,17 @@ import './TypingTest.css';
 import wordsData from './words.json';
 
 function TypingTest() {
-  const [text, setText] = useState('');
+  // Helper function to generate random text
+  const generateText = () => {
+    const words = [];
+    for (let i = 0; i < 50; i++) {
+      const randomWord = wordsData[Math.floor(Math.random() * wordsData.length)];
+      words.push(randomWord);
+    }
+    return words.join(' ');
+  };
+
+  const [text, setText] = useState(generateText);
   const [userInput, setUserInput] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [events, setEvents] = useState([]);
@@ -24,19 +34,6 @@ function TypingTest() {
     userInputRef.current = userInput;
     eventsRef.current = events;
   }, [text, userInput, events]);
-
-  // Generate random word sequence on mount
-  useEffect(() => {
-    const generateText = () => {
-      const words = [];
-      for (let i = 0; i < 50; i++) {
-        const randomWord = wordsData[Math.floor(Math.random() * wordsData.length)];
-        words.push(randomWord);
-      }
-      return words.join(' ');
-    };
-    setText(generateText());
-  }, []);
 
   // Calculate accuracy
   const calculateAccuracy = (input, targetText) => {
@@ -217,15 +214,6 @@ function TypingTest() {
 
   // Reset function
   const reset = () => {
-    const generateText = () => {
-      const words = [];
-      for (let i = 0; i < 50; i++) {
-        const randomWord = wordsData[Math.floor(Math.random() * wordsData.length)];
-        words.push(randomWord);
-      }
-      return words.join(' ');
-    };
-    
     setText(generateText());
     setUserInput('');
     setCurrentIndex(0);
