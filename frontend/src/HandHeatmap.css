@@ -1,0 +1,97 @@
+.hand-heatmap {
+  margin-top: 30px;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.hand-heatmap h3 {
+  text-align: center;
+  color: #333;
+  margin-top: 0;
+}
+
+.hands-container {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.hand {
+  flex: 1;
+  min-width: 280px;
+  max-width: 400px;
+}
+
+.hand h4 {
+  text-align: center;
+  color: #555;
+  margin-bottom: 15px;
+}
+
+.fingers {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.finger {
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px 8px 50% 50%;
+  border: 2px solid #555;
+  padding: 10px;
+  cursor: default;
+  transition: transform 0.2s;
+}
+
+.finger:hover {
+  transform: translateY(-5px);
+}
+
+.finger-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 5px;
+  text-align: center;
+}
+
+.finger-value {
+  font-size: 14px;
+  font-weight: bold;
+  color: rgba(0, 0, 0, 0.8);
+  text-align: center;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 20px;
+  font-size: 14px;
+  color: #555;
+}
+
+.legend-gradient {
+  width: 200px;
+  height: 20px;
+  background: linear-gradient(to right, 
+    hsl(120, 70%, 50%), 
+    hsl(60, 70%, 50%), 
+    hsl(0, 70%, 50%)
+  );
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
