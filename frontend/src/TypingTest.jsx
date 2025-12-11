@@ -25,6 +25,8 @@ function TypingTest() {
   const [sessionStarted, setSessionStarted] = useState(false);
   const inactivityTimerRef = useRef(null);
   const sessionStartTimeRef = useRef(null);
+  const textDisplayRef = useRef(null);
+  const [charWidth, setCharWidth] = useState(SCROLL_SPEED_MULTIPLIER);
   
   // Refs to store latest values for timeout callback
   const textRef = useRef(text);
@@ -37,6 +39,26 @@ function TypingTest() {
     userInputRef.current = userInput;
     eventsRef.current = events;
   }, [text, userInput, events]);
+
+  // Measure character width for precise scrolling
+  useEffect(() => {
+    if (textDisplayRef.current) {
+      // Get the first character element to measure its width
+      const firstChar = textDisplayRef.current.querySelector('.char');
+      if (firstChar) {
+        const rect = firstChar.getBoundingClientRect();
+        const computedStyle = getComputedStyle(textDisplayRef.current);
+        if (computedStyle && computedStyle.fontSize) {
+          const fontSize = parseFloat(computedStyle.fontSize);
+          // Convert pixel width to em units, fallback to SCROLL_SPEED_MULTIPLIER if invalid
+          const widthInEm = rect.width / fontSize;
+          if (!isNaN(widthInEm) && widthInEm > 0) {
+            setCharWidth(widthInEm);
+          }
+        }
+      }
+    }
+  }, [text]); // Recalculate when text changes
 
   // Calculate accuracy
   const calculateAccuracy = (input, targetText) => {
@@ -241,9 +263,10 @@ function TypingTest() {
 
       <div className="text-container">
         <div 
+          ref={textDisplayRef}
           className="text-display" 
           style={{
-            transform: `translateX(${-currentIndex * SCROLL_SPEED_MULTIPLIER}em)`,
+            transform: `translateX(${-currentIndex * charWidth}em)`,
             marginLeft: '50%'
           }}
         >
