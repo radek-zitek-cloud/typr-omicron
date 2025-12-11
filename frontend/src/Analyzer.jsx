@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import './Analyzer.css';
 import fingerMap from './fingermap.json';
 import KeyboardHeatmap from './KeyboardHeatmap';
@@ -11,6 +11,17 @@ function Analyzer() {
   const [dwellTimeByFinger, setDwellTimeByFinger] = useState(null);
   const [flightTimeByKey, setFlightTimeByKey] = useState(null);
   const [flightTimeByFinger, setFlightTimeByFinger] = useState(null);
+
+  // Pre-process fingerMap for efficient lookups
+  const fingerLookup = useMemo(() => {
+    const lookup = new Map();
+    Object.entries(fingerMap).forEach(([finger, keys]) => {
+      keys.forEach(key => {
+        lookup.set(key.toLowerCase(), finger);
+      });
+    });
+    return lookup;
+  }, []);
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -30,6 +41,12 @@ function Analyzer() {
   };
 
   const analyzeData = (data) => {
+    // Validate data has required fields
+    if (!data || !data.events || !Array.isArray(data.events)) {
+      alert('Invalid session data format: missing or invalid events array');
+      return;
+    }
+
     // Calculate basic statistics
     const stats = calculateStatistics(data);
     setStatistics(stats);
@@ -150,13 +167,8 @@ function Analyzer() {
       if (event.type === 'keydown') {
         if (lastKeyUpTime !== null && lastKey !== null) {
           const flightTime = event.timestamp - lastKeyUpTime;
-          const transitionKey = `${lastKey}->${event.key}`;
-          if (!flightTimes[transitionKey]) {
-            flightTimes[transitionKey] = [];
-          }
-          flightTimes[transitionKey].push(flightTime);
           
-          // Also store by target key
+          // Store by target key for aggregation
           if (!flightTimes[event.key]) {
             flightTimes[event.key] = [];
           }
@@ -171,12 +183,9 @@ function Analyzer() {
     // Calculate average flight time for each key
     const averageFlightTimes = {};
     Object.keys(flightTimes).forEach(key => {
-      // Only process single keys, not transitions
-      if (!key.includes('->')) {
-        const times = flightTimes[key];
-        const avg = times.reduce((sum, t) => sum + t, 0) / times.length;
-        averageFlightTimes[key] = avg;
-      }
+      const times = flightTimes[key];
+      const avg = times.reduce((sum, t) => sum + t, 0) / times.length;
+      averageFlightTimes[key] = avg;
     });
 
     return averageFlightTimes;
@@ -207,15 +216,8 @@ function Analyzer() {
   };
 
   const getFingerForKey = (key) => {
-    // Normalize key for lookup
-    const normalizedKey = key.toLowerCase();
-    
-    for (const [finger, keys] of Object.entries(fingerMap)) {
-      if (keys.map(k => k.toLowerCase()).includes(normalizedKey)) {
-        return finger;
-      }
-    }
-    return null;
+    // Use pre-processed lookup map for efficient O(1) lookup
+    return fingerLookup.get(key.toLowerCase()) || null;
   };
 
   const resetAnalyzer = () => {

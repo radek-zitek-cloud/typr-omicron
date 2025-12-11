@@ -52,10 +52,10 @@ function HandHeatmap({ data, title }) {
                 key={finger.code}
                 className="finger"
                 style={{ backgroundColor: getHeatColor(finger.code) }}
-                title={data && data[finger.code] ? `${finger.name}: ${data[finger.code].toFixed(2)}ms` : finger.name}
+                title={data && data[finger.code] && typeof data[finger.code] === 'number' ? `${finger.name}: ${data[finger.code].toFixed(2)}ms` : finger.name}
               >
                 <div className="finger-name">{finger.name}</div>
-                {data && data[finger.code] && (
+                {data && data[finger.code] && typeof data[finger.code] === 'number' && (
                   <div className="finger-value">{data[finger.code].toFixed(1)}ms</div>
                 )}
               </div>
@@ -71,10 +71,10 @@ function HandHeatmap({ data, title }) {
                 key={finger.code}
                 className="finger"
                 style={{ backgroundColor: getHeatColor(finger.code) }}
-                title={data && data[finger.code] ? `${finger.name}: ${data[finger.code].toFixed(2)}ms` : finger.name}
+                title={data && data[finger.code] && typeof data[finger.code] === 'number' ? `${finger.name}: ${data[finger.code].toFixed(2)}ms` : finger.name}
               >
                 <div className="finger-name">{finger.name}</div>
-                {data && data[finger.code] && (
+                {data && data[finger.code] && typeof data[finger.code] === 'number' && (
                   <div className="finger-value">{data[finger.code].toFixed(1)}ms</div>
                 )}
               </div>

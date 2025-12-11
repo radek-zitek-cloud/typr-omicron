@@ -103,10 +103,10 @@ function KeyboardHeatmap({ data, title }) {
                   key={keyIndex}
                   className={getKeyClass(key)}
                   style={{ backgroundColor: bgColor }}
-                  title={value ? `${key}: ${value.toFixed(2)}ms` : key}
+                  title={value && typeof value === 'number' ? `${key}: ${value.toFixed(2)}ms` : key}
                 >
                   <span className="key-label">{getKeyDisplay(key)}</span>
-                  {value && (
+                  {value && typeof value === 'number' && (
                     <span className="key-value">{value.toFixed(0)}</span>
                   )}
                 </div>
