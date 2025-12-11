@@ -2,6 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './TypingTest.css';
 import wordsData from './words.json';
 
+// Configuration constants
+const INACTIVITY_TIMEOUT_MS = 5000; // 5 seconds
+const SCROLL_START_THRESHOLD = 20; // Start scrolling after this many characters
+const SCROLL_SPEED_MULTIPLIER = 0.6; // Controls how fast the text scrolls
+
 function TypingTest() {
   // Helper function to generate random text
   const generateText = () => {
@@ -85,7 +90,7 @@ function TypingTest() {
     
     inactivityTimerRef.current = setTimeout(() => {
       endSession();
-    }, 5000); // 5 seconds of inactivity
+    }, INACTIVITY_TIMEOUT_MS);
   }, [endSession]);
 
   // Export session data as JSON (for manual export button)
@@ -149,8 +154,7 @@ function TypingTest() {
       setCurrentIndex(prev => prev + 1);
       
       // Adjust scroll offset to keep caret centered
-      // Start scrolling after a certain threshold
-      if (currentIndex > 20) {
+      if (currentIndex > SCROLL_START_THRESHOLD) {
         setScrollOffset(prev => prev + 1);
       }
 
@@ -249,7 +253,7 @@ function TypingTest() {
         <div 
           className="text-display" 
           style={{
-            transform: `translateX(-${scrollOffset * 0.6}em)`
+            transform: `translateX(-${scrollOffset * SCROLL_SPEED_MULTIPLIER}em)`
           }}
         >
           {text.split('').map((char, index) => renderCharacter(char, index))}
