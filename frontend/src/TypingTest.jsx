@@ -193,6 +193,8 @@ function TypingTest() {
       
       // Only count as productive keystroke if position was never an error
       // and the current keystroke is correct
+      // Note: We check errorPositions (current state) before setErrorPositions updates it,
+      // so if this keystroke is incorrect, it won't be counted as productive
       if (currentIndex >= userInput.length && !errorPositions.has(currentIndex) && !isIncorrect) {
         // Typing new character at a position that was never an error and is correct - count as productive
         setProductiveKeystrokes(prev => prev + 1);

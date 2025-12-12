@@ -84,8 +84,9 @@ function Analyzer() {
     const cpm = minutes > 0 ? (effectiveKeystrokes / minutes).toFixed(2) : 0;
     
     // Calculate WPM (words per minute, based on productive keystrokes)
-    // Assuming average word length of 5 characters
-    const wpm = minutes > 0 ? (effectiveKeystrokes / 5 / minutes).toFixed(2) : 0;
+    // Using standard assumption of 5 characters per word for consistent WPM calculation
+    const CHARS_PER_WORD = 5;
+    const wpm = minutes > 0 ? (effectiveKeystrokes / CHARS_PER_WORD / minutes).toFixed(2) : 0;
     
     // Calculate accuracy using error positions if available
     let correct = 0;
@@ -266,11 +267,11 @@ function Analyzer() {
               <h2>Basic Statistics</h2>
               <div className="stats-grid">
                 <div className="stat-item">
-                  <span className="stat-label">Characters Per Minute:</span>
+                  <span className="stat-label">Characters Per Minute (productive):</span>
                   <span className="stat-value">{statistics.cpm}</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-label">Words Per Minute:</span>
+                  <span className="stat-label">Words Per Minute (productive):</span>
                   <span className="stat-value">{statistics.wpm}</span>
                 </div>
                 <div className="stat-item">
