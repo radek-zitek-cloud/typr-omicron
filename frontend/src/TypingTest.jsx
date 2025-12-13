@@ -172,6 +172,9 @@ function TypingTest() {
 
   // Handle key down event
   const handleKeyDown = useCallback((e) => {
+    // Prevent actions if we've completed the text
+    if (currentIndex >= text.length) return;
+    
     // Start session on first keystroke
     if (!sessionStarted) {
       setSessionStarted(true);
@@ -186,7 +189,7 @@ function TypingTest() {
       timestamp: Date.now(),
       relativeTime: sessionStartTimeRef.current ? Date.now() - sessionStartTimeRef.current : 0,
       currentIndex: currentIndex,
-      expectedChar: text[currentIndex],
+      expectedChar: currentIndex < text.length ? text[currentIndex] : '',
     };
 
     setEvents(prev => [...prev, eventData]);
@@ -266,8 +269,8 @@ function TypingTest() {
       // Move to next character
       setCurrentIndex(prev => prev + 1);
 
-      // Check if we've reached the end of the text
-      if (currentIndex >= text.length - 1) {
+      // Check if we've reached the end of the text (after incrementing)
+      if (currentIndex + 1 >= text.length) {
         endSession();
       }
     }
@@ -284,7 +287,7 @@ function TypingTest() {
       timestamp: Date.now(),
       relativeTime: Date.now() - sessionStartTimeRef.current,
       currentIndex: currentIndex,
-      expectedChar: text[currentIndex],
+      expectedChar: currentIndex < text.length ? text[currentIndex] : '',
     };
 
     setEvents(prev => [...prev, eventData]);
