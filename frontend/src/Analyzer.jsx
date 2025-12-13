@@ -1,10 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useAppContext } from './AppContext';
 import './Analyzer.css';
 import fingerMap from './fingermap.json';
 import KeyboardHeatmap from './KeyboardHeatmap';
 import HandHeatmap from './HandHeatmap';
 
 function Analyzer() {
+  const [searchParams] = useSearchParams();
+  const { getSession } = useAppContext();
+  
   const [sessionData, setSessionData] = useState(null);
   const [statistics, setStatistics] = useState(null);
   const [dwellTimeByKey, setDwellTimeByKey] = useState(null);
@@ -29,68 +34,12 @@ function Analyzer() {
     return lookup;
   }, []);
 
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+  const getFingerForKey = useCallback((key) => {
+    // Use pre-processed lookup map for efficient O(1) lookup
+    return fingerLookup.get(key.toLowerCase()) || null;
+  }, [fingerLookup]);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target.result);
-        setSessionData(data);
-        analyzeData(data);
-      } catch (error) {
-        alert('Error parsing JSON file: ' + error.message);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const analyzeData = (data) => {
-    // Validate data has required fields
-    if (!data || !data.events || !Array.isArray(data.events)) {
-      alert('Invalid session data format: missing or invalid events array');
-      return;
-    }
-
-    // Calculate basic statistics
-    const stats = calculateStatistics(data);
-    setStatistics(stats);
-
-    // Calculate dwell time per key
-    const dwellByKey = calculateDwellTimeByKey(data.events);
-    setDwellTimeByKey(dwellByKey);
-
-    // Calculate dwell time per finger
-    const dwellByFinger = calculateDwellTimeByFinger(dwellByKey);
-    setDwellTimeByFinger(dwellByFinger);
-
-    // Calculate flight time per key
-    const flightByKey = calculateFlightTimeByKey(data.events);
-    setFlightTimeByKey(flightByKey);
-
-    // Calculate flight time per finger
-    const flightByFinger = calculateFlightTimeByFinger(flightByKey);
-    setFlightTimeByFinger(flightByFinger);
-    
-    // V2 Analytics: Calculate digraph latency
-    const digraphs = calculateDigraphLatency(data.events, data.charStates);
-    setDigraphLatency(digraphs);
-    
-    // V2 Analytics: Calculate error confusion matrix
-    const confusionMatrix = calculateErrorConfusionMatrix(data.charStates);
-    setErrorConfusionMatrix(confusionMatrix);
-    
-    // V2 Analytics: Calculate rhythm data
-    const rhythm = calculateRhythmData(data.events, data.charStates);
-    setRhythmData(rhythm);
-    
-    // V2 Analytics: Calculate shift penalty
-    const penalty = calculateShiftPenalty(data.events);
-    setShiftPenalty(penalty);
-  };
-
-  const calculateStatistics = (data) => {
+  const calculateStatistics = useCallback((data) => {
     const { sessionDuration, text, userInput, productiveKeystrokes, errorPositions, 
             mechanicalCPM, productiveCPM, totalKeystrokes, maxIndexReached, firstTimeErrors } = data;
     
@@ -151,9 +100,9 @@ function Analyzer() {
       productiveKeystrokes: effectiveKeystrokes,
       sessionDuration: (sessionDuration / 1000).toFixed(2)
     };
-  };
+  }, []);
 
-  const calculateDwellTimeByKey = (events) => {
+  const calculateDwellTimeByKey = useCallback((events) => {
     const dwellTimes = {};
     const keyDownMap = new Map();
 
@@ -182,9 +131,9 @@ function Analyzer() {
     });
 
     return averageDwellTimes;
-  };
+  }, []);
 
-  const calculateDwellTimeByFinger = (dwellByKey) => {
+  const calculateDwellTimeByFinger = useCallback((dwellByKey) => {
     const fingerDwellTimes = {};
 
     Object.keys(dwellByKey).forEach(key => {
@@ -206,9 +155,9 @@ function Analyzer() {
     });
 
     return averageFingerDwellTimes;
-  };
+  }, [getFingerForKey]);
 
-  const calculateFlightTimeByKey = (events) => {
+  const calculateFlightTimeByKey = useCallback((events) => {
     const flightTimes = {};
     let lastKeyUpTime = null;
     let lastKey = null;
@@ -239,9 +188,9 @@ function Analyzer() {
     });
 
     return averageFlightTimes;
-  };
+  }, []);
 
-  const calculateFlightTimeByFinger = (flightByKey) => {
+  const calculateFlightTimeByFinger = useCallback((flightByKey) => {
     const fingerFlightTimes = {};
 
     Object.keys(flightByKey).forEach(key => {
@@ -263,10 +212,10 @@ function Analyzer() {
     });
 
     return averageFingerFlightTimes;
-  };
+  }, [getFingerForKey]);
 
   // V2 Analytics: Calculate digraph latency (flight time between character pairs)
-  const calculateDigraphLatency = (events, charStates) => {
+  const calculateDigraphLatency = useCallback((events, charStates) => {
     const digraphTimes = {};
     let lastKeyUpTime = null;
     let lastChar = null;
@@ -337,10 +286,10 @@ function Analyzer() {
 
     // Sort by average latency (slowest first)
     return digraphAverages.sort((a, b) => b.avgLatency - a.avgLatency);
-  };
+  }, [getFingerForKey]);
 
   // V2 Analytics: Calculate error confusion matrix
-  const calculateErrorConfusionMatrix = (charStates) => {
+  const calculateErrorConfusionMatrix = useCallback((charStates) => {
     if (!charStates || !Array.isArray(charStates)) {
       return null;
     }
@@ -379,10 +328,10 @@ function Analyzer() {
     }).sort((a, b) => b.totalErrors - a.totalErrors);
 
     return confusionData.length > 0 ? confusionData : null;
-  };
+  }, []);
 
   // V2 Analytics: Calculate rhythm data (keydown to keydown intervals)
-  const calculateRhythmData = (events, charStates) => {
+  const calculateRhythmData = useCallback((events, charStates) => {
     if (!events || !charStates) {
       return null;
     }
@@ -423,10 +372,10 @@ function Analyzer() {
     });
 
     return intervals.length > 0 ? intervals : null;
-  };
+  }, []);
 
   // V2 Analytics: Calculate shift penalty (capitalization cost)
-  const calculateShiftPenalty = (events) => {
+  const calculateShiftPenalty = useCallback((events) => {
     if (!events) {
       return null;
     }
@@ -479,11 +428,82 @@ function Analyzer() {
       uppercaseCount: uppercaseIntervals.length,
       lowercaseCount: lowercaseIntervals.length
     };
-  };
+  }, []);
 
-  const getFingerForKey = (key) => {
-    // Use pre-processed lookup map for efficient O(1) lookup
-    return fingerLookup.get(key.toLowerCase()) || null;
+  const analyzeData = useCallback((data) => {
+    // Validate data has required fields
+    if (!data || !data.events || !Array.isArray(data.events)) {
+      alert('Invalid session data format: missing or invalid events array');
+      return;
+    }
+
+    // Calculate basic statistics
+    const stats = calculateStatistics(data);
+    setStatistics(stats);
+
+    // Calculate dwell time per key
+    const dwellByKey = calculateDwellTimeByKey(data.events);
+    setDwellTimeByKey(dwellByKey);
+
+    // Calculate dwell time per finger
+    const dwellByFinger = calculateDwellTimeByFinger(dwellByKey);
+    setDwellTimeByFinger(dwellByFinger);
+
+    // Calculate flight time per key
+    const flightByKey = calculateFlightTimeByKey(data.events);
+    setFlightTimeByKey(flightByKey);
+
+    // Calculate flight time per finger
+    const flightByFinger = calculateFlightTimeByFinger(flightByKey);
+    setFlightTimeByFinger(flightByFinger);
+    
+    // V2 Analytics: Calculate digraph latency
+    const digraphs = calculateDigraphLatency(data.events, data.charStates);
+    setDigraphLatency(digraphs);
+    
+    // V2 Analytics: Calculate error confusion matrix
+    const confusionMatrix = calculateErrorConfusionMatrix(data.charStates);
+    setErrorConfusionMatrix(confusionMatrix);
+    
+    // V2 Analytics: Calculate rhythm data
+    const rhythm = calculateRhythmData(data.events, data.charStates);
+    setRhythmData(rhythm);
+    
+    // V2 Analytics: Calculate shift penalty
+    const penalty = calculateShiftPenalty(data.events);
+    setShiftPenalty(penalty);
+  }, [calculateStatistics, calculateDwellTimeByKey, calculateDwellTimeByFinger, 
+      calculateFlightTimeByKey, calculateFlightTimeByFinger, calculateDigraphLatency,
+      calculateErrorConfusionMatrix, calculateRhythmData, calculateShiftPenalty]);
+
+  // Load session from query parameter
+  useEffect(() => {
+    const sessionId = searchParams.get('session');
+    if (sessionId && getSession) {
+      const session = getSession(sessionId);
+      if (session) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSessionData(session);
+        analyzeData(session);
+      }
+    }
+  }, [searchParams, getSession, analyzeData]);
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        setSessionData(data);
+        analyzeData(data);
+      } catch (error) {
+        alert('Error parsing JSON file: ' + error.message);
+      }
+    };
+    reader.readAsText(file);
   };
 
   const resetAnalyzer = () => {
