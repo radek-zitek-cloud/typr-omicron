@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './TypingTest.css';
 import wordsData from './words.json';
 
@@ -23,9 +23,10 @@ function initializeTextAndStates(wordsData) {
 }
 
 function TypingTest() {
-  const initialData = initializeTextAndStates(wordsData);
+  // Generate initial data once using useMemo (memoized, won't regenerate)
+  const initialData = useMemo(() => initializeTextAndStates(wordsData), []);
+  
   const [text, setText] = useState(initialData.text);
-  // New data structure: array of objects for each character
   const [charStates, setCharStates] = useState(initialData.charStates);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [events, setEvents] = useState([]);
@@ -333,9 +334,9 @@ function TypingTest() {
 
   // Reset function
   const reset = () => {
-    const newData = initializeTextAndStates(wordsData);
-    setText(newData.text);
-    setCharStates(newData.charStates);
+    // Reset to initial state (same text for retry)
+    setText(initialData.text);
+    setCharStates(initialData.charStates);
     setCurrentIndex(0);
     setEvents([]);
     setSessionActive(false);
