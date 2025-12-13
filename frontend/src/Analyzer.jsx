@@ -41,6 +41,7 @@ function Analyzer() {
   }, [fingerLookup]);
 
   const calculateStatistics = useCallback((data) => {
+    const CHARS_PER_WORD = 5; // Standard assumption for WPM calculation
     const { sessionDuration, text, userInput, productiveKeystrokes, errorPositions, 
             mechanicalCPM, productiveCPM, totalKeystrokes, maxIndexReached, firstTimeErrors } = data;
     
@@ -51,8 +52,8 @@ function Analyzer() {
       const accuracy = data.accuracy || 100;
       
       // Calculate WPM from CPM (standard: 5 characters per word)
-      const netWPM = (productiveCPM / 5).toFixed(2);
-      const rawWPM = (mechanicalCPM / 5).toFixed(2);
+      const netWPM = (productiveCPM / CHARS_PER_WORD).toFixed(2);
+      const rawWPM = (mechanicalCPM / CHARS_PER_WORD).toFixed(2);
       
       return {
         sessionDuration,
@@ -81,8 +82,6 @@ function Analyzer() {
     const cpm = minutes > 0 ? (effectiveKeystrokes / minutes).toFixed(2) : 0;
     
     // Calculate WPM (words per minute, based on productive keystrokes)
-    // Using standard assumption of 5 characters per word for consistent WPM calculation
-    const CHARS_PER_WORD = 5;
     const wpm = minutes > 0 ? (effectiveKeystrokes / CHARS_PER_WORD / minutes).toFixed(2) : 0;
     
     // Calculate accuracy using error positions if available
@@ -439,6 +438,8 @@ function Analyzer() {
 
   // Calculate WPM over time with error and backspace markers
   const calculateWpmOverTime = useCallback((events, charStates) => {
+    const CHARS_PER_WORD = 5; // Standard assumption for WPM calculation
+    
     if (!events || !charStates) {
       return null;
     }
@@ -505,7 +506,7 @@ function Analyzer() {
     // Calculate instant WPM for each bucket
     const instantWpm = buckets.map((bucket, idx) => {
       const timeInSeconds = idx; // bucket index represents seconds
-      const wpm = (bucket.charsTyped / 5) * 60; // Convert chars to WPM
+      const wpm = (bucket.charsTyped / CHARS_PER_WORD) * 60; // Convert chars to WPM
       return { time: timeInSeconds, wpm };
     });
 
@@ -755,8 +756,14 @@ function Analyzer() {
                   
                   {/* Plot the WPM line */}
                   {(() => {
-                    const maxTime = Math.max(...wpmOverTime.wpmData.map(d => d.time));
-                    const maxWpm = Math.max(...wpmOverTime.wpmData.map(d => d.wpm), 1);
+                    // Optimize: Calculate maxTime and maxWpm in a single pass
+                    const { maxTime, maxWpm } = wpmOverTime.wpmData.reduce(
+                      (acc, d) => ({
+                        maxTime: Math.max(acc.maxTime, d.time),
+                        maxWpm: Math.max(acc.maxWpm, d.wpm)
+                      }),
+                      { maxTime: 0, maxWpm: 1 }
+                    );
                     
                     const points = wpmOverTime.wpmData.map((d) => {
                       const x = 60 + ((d.time / maxTime) * 700);
@@ -776,6 +783,9 @@ function Analyzer() {
                         {/* Error markers (red X) */}
                         {wpmOverTime.errorMarkers.map((marker, idx) => {
                           const bucketIdx = Math.floor(marker.relativeTime);
+                          // Bounds check to prevent array access errors
+                          if (bucketIdx < 0 || bucketIdx >= wpmOverTime.wpmData.length) return null;
+                          
                           const wpmPoint = wpmOverTime.wpmData[bucketIdx];
                           if (!wpmPoint) return null;
                           
@@ -793,6 +803,9 @@ function Analyzer() {
                         {/* Backspace markers (yellow/orange ◄) */}
                         {wpmOverTime.backspaceMarkers.map((marker, idx) => {
                           const bucketIdx = Math.floor(marker.relativeTime);
+                          // Bounds check to prevent array access errors
+                          if (bucketIdx < 0 || bucketIdx >= wpmOverTime.wpmData.length) return null;
+                          
                           const wpmPoint = wpmOverTime.wpmData[bucketIdx];
                           if (!wpmPoint) return null;
                           
