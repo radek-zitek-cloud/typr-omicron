@@ -69,8 +69,27 @@ function Analyzer() {
   };
 
   const calculateStatistics = (data) => {
-    const { sessionDuration, text, userInput, productiveKeystrokes, errorPositions } = data;
+    const { sessionDuration, text, userInput, productiveKeystrokes, errorPositions, 
+            mechanicalCPM, productiveCPM, totalKeystrokes, maxIndexReached, firstTimeErrors } = data;
     
+    // Support both old and new data formats
+    // New format: use mechanicalCPM and productiveCPM directly if available
+    if (mechanicalCPM !== undefined && productiveCPM !== undefined) {
+      // New format - use the pre-calculated values
+      const accuracy = data.accuracy || 100;
+      
+      return {
+        sessionDuration,
+        mechanicalCPM: mechanicalCPM.toFixed(2),
+        productiveCPM: productiveCPM.toFixed(2),
+        accuracy: accuracy.toFixed(2),
+        totalKeystrokes: totalKeystrokes || 0,
+        maxIndexReached: maxIndexReached || 0,
+        firstTimeErrorCount: firstTimeErrors ? firstTimeErrors.length : 0,
+      };
+    }
+    
+    // Old format - calculate from raw data
     // Use productive keystrokes if available, otherwise fall back to userInput length
     const effectiveKeystrokes = productiveKeystrokes !== undefined 
       ? productiveKeystrokes 
@@ -266,30 +285,67 @@ function Analyzer() {
             <div className="stats-panel">
               <h2>Basic Statistics</h2>
               <div className="stats-grid">
-                <div className="stat-item">
-                  <span className="stat-label">Characters Per Minute (productive):</span>
-                  <span className="stat-value">{statistics.cpm}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Words Per Minute (productive):</span>
-                  <span className="stat-value">{statistics.wpm}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Accuracy:</span>
-                  <span className="stat-value">{statistics.accuracy}%</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Session Duration:</span>
-                  <span className="stat-value">{statistics.sessionDuration}s</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Total Characters:</span>
-                  <span className="stat-value">{statistics.totalChars}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Productive Keystrokes:</span>
-                  <span className="stat-value">{statistics.productiveKeystrokes}</span>
-                </div>
+                {/* New format shows mechanical and productive CPM separately */}
+                {statistics.mechanicalCPM !== undefined ? (
+                  <>
+                    <div className="stat-item">
+                      <span className="stat-label">Mechanical CPM (all keystrokes):</span>
+                      <span className="stat-value">{statistics.mechanicalCPM}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Productive CPM (unique progress):</span>
+                      <span className="stat-value">{statistics.productiveCPM}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Accuracy:</span>
+                      <span className="stat-value">{statistics.accuracy}%</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Session Duration:</span>
+                      <span className="stat-value">{(statistics.sessionDuration / 1000).toFixed(2)}s</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Total Keystrokes:</span>
+                      <span className="stat-value">{statistics.totalKeystrokes}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Max Index Reached:</span>
+                      <span className="stat-value">{statistics.maxIndexReached}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">First-Time Errors:</span>
+                      <span className="stat-value">{statistics.firstTimeErrorCount}</span>
+                    </div>
+                  </>
+                ) : (
+                  /* Old format */
+                  <>
+                    <div className="stat-item">
+                      <span className="stat-label">Characters Per Minute (productive):</span>
+                      <span className="stat-value">{statistics.cpm}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Words Per Minute (productive):</span>
+                      <span className="stat-value">{statistics.wpm}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Accuracy:</span>
+                      <span className="stat-value">{statistics.accuracy}%</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Session Duration:</span>
+                      <span className="stat-value">{statistics.sessionDuration}s</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Total Characters:</span>
+                      <span className="stat-value">{statistics.totalChars}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Productive Keystrokes:</span>
+                      <span className="stat-value">{statistics.productiveKeystrokes}</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
