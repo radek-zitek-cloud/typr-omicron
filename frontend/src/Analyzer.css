@@ -80,6 +80,56 @@
   padding-bottom: 10px;
 }
 
+.wpm-headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  border-radius: 8px;
+  gap: 20px;
+}
+
+.wpm-primary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.wpm-value {
+  font-size: 64px;
+  font-weight: bold;
+  color: white;
+  line-height: 1;
+}
+
+.wpm-label {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  margin-top: 5px;
+}
+
+.wpm-secondary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 10px;
+}
+
+.wpm-raw-value {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+.wpm-raw-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -299,6 +349,65 @@
   background: white;
   border-radius: 5px;
   padding: 10px;
+}
+
+/* WPM over Time Chart Styles */
+.wpm-chart-container {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.wpm-chart {
+  width: 100%;
+  height: auto;
+  background: white;
+  border-radius: 5px;
+  padding: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.wpm-legend {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 20px;
+  padding: 15px;
+  background: white;
+  border-radius: 5px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #333;
+}
+
+.legend-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.legend-marker.line-marker {
+  width: 30px;
+  height: 3px;
+  background: #4CAF50;
+  border-radius: 2px;
+}
+
+.legend-marker.error-marker {
+  color: #f44336;
+  font-size: 16px;
+}
+
+.legend-marker.backspace-marker {
+  color: #fb8c00;
+  font-size: 16px;
 }
 
 .rhythm-analysis {
