@@ -76,6 +76,11 @@
   background-color: rgba(248, 113, 113, 0.2);
 }
 
+.char.corrected {
+  color: #fb923c;
+  background-color: rgba(251, 146, 60, 0.2);
+}
+
 .char.current {
   color: #fff;
   font-weight: bold;
@@ -164,6 +169,10 @@
   
   .char.incorrect {
     background-color: rgba(248, 113, 113, 0.3);
+  }
+  
+  .char.corrected {
+    background-color: rgba(251, 146, 60, 0.3);
   }
 }
 

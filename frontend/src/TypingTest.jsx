@@ -6,19 +6,27 @@ import wordsData from './words.json';
 const INACTIVITY_TIMEOUT_MS = 5000; // 5 seconds
 const SCROLL_SPEED_MULTIPLIER = 0.6; // Controls how fast the text scrolls
 
-function TypingTest() {
-  // Helper function to generate random text
-  const generateText = () => {
-    const words = [];
-    for (let i = 0; i < 50; i++) {
-      const randomWord = wordsData[Math.floor(Math.random() * wordsData.length)];
-      words.push(randomWord);
-    }
-    return words.join(' ');
-  };
+// Helper function to generate random text and initialize char states
+function initializeTextAndStates(wordsData) {
+  const words = [];
+  for (let i = 0; i < 50; i++) {
+    const randomWord = wordsData[Math.floor(Math.random() * wordsData.length)];
+    words.push(randomWord);
+  }
+  const textStr = words.join(' ');
+  const initialStates = textStr.split('').map(char => ({
+    char: char,
+    userBuffer: null,
+    status: 'pending' // pending, correct, incorrect, corrected
+  }));
+  return { text: textStr, charStates: initialStates };
+}
 
-  const [text, setText] = useState(generateText);
-  const [userInput, setUserInput] = useState('');
+function TypingTest() {
+  const initialData = initializeTextAndStates(wordsData);
+  const [text, setText] = useState(initialData.text);
+  // New data structure: array of objects for each character
+  const [charStates, setCharStates] = useState(initialData.charStates);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [events, setEvents] = useState([]);
   const [sessionActive, setSessionActive] = useState(false);
@@ -27,26 +35,28 @@ function TypingTest() {
   const sessionStartTimeRef = useRef(null);
   const textDisplayRef = useRef(null);
   const [charWidth, setCharWidth] = useState(SCROLL_SPEED_MULTIPLIER);
-  // Track which positions have been typed incorrectly at least once
-  const [errorPositions, setErrorPositions] = useState(new Set());
-  // Track productive keystrokes (excluding backspace and corrections)
-  const [productiveKeystrokes, setProductiveKeystrokes] = useState(0);
+  // Track metrics
+  const [totalKeystrokes, setTotalKeystrokes] = useState(0); // Mechanical: all keypresses
+  const [maxIndexReached, setMaxIndexReached] = useState(0); // Productive: unique indices visited
+  const [firstTimeErrors, setFirstTimeErrors] = useState(new Set()); // Positions with first-attempt error
   
   // Refs to store latest values for timeout callback
   const textRef = useRef(text);
-  const userInputRef = useRef(userInput);
+  const charStatesRef = useRef(charStates);
   const eventsRef = useRef(events);
-  const errorPositionsRef = useRef(errorPositions);
-  const productiveKeystrokesRef = useRef(productiveKeystrokes);
+  const totalKeystrokesRef = useRef(totalKeystrokes);
+  const maxIndexReachedRef = useRef(maxIndexReached);
+  const firstTimeErrorsRef = useRef(firstTimeErrors);
   
   // Update refs when state changes
   useEffect(() => {
     textRef.current = text;
-    userInputRef.current = userInput;
+    charStatesRef.current = charStates;
     eventsRef.current = events;
-    errorPositionsRef.current = errorPositions;
-    productiveKeystrokesRef.current = productiveKeystrokes;
-  }, [text, userInput, events, errorPositions, productiveKeystrokes]);
+    totalKeystrokesRef.current = totalKeystrokes;
+    maxIndexReachedRef.current = maxIndexReached;
+    firstTimeErrorsRef.current = firstTimeErrors;
+  }, [text, charStates, events, totalKeystrokes, maxIndexReached, firstTimeErrors]);
 
   // Measure character width for precise scrolling
   useEffect(() => {
@@ -68,17 +78,13 @@ function TypingTest() {
     }
   }, [text]); // Recalculate when text changes
 
-  // Calculate accuracy - characters marked as incorrect stay incorrect even after correction
-  const calculateAccuracy = (input, targetText, errPositions) => {
-    if (input.length === 0) return 100;
-    let correct = 0;
-    for (let i = 0; i < input.length; i++) {
-      // A character is correct only if it matches AND was never typed incorrectly
-      if (input[i] === targetText[i] && !errPositions.has(i)) {
-        correct++;
-      }
-    }
-    return ((correct / input.length) * 100).toFixed(2);
+  // Calculate accuracy - productive accuracy only (first-time attempts)
+  const calculateAccuracy = (maxReached, errors) => {
+    if (maxReached === 0) return 100;
+    const productiveChars = maxReached;
+    const firstTimeErrorCount = errors.size;
+    const correct = productiveChars - firstTimeErrorCount;
+    return ((correct / productiveChars) * 100).toFixed(2);
   };
 
   // End session and export data
@@ -89,17 +95,39 @@ function TypingTest() {
       inactivityTimerRef.current = null;
     }
     
+    // Calculate session duration
+    const duration = sessionStartTimeRef.current 
+      ? Date.now() - sessionStartTimeRef.current 
+      : 0;
+    const durationInMinutes = duration / 60000;
+    
+    // Calculate metrics
+    const mechanicalCPM = durationInMinutes > 0 
+      ? (totalKeystrokesRef.current / durationInMinutes).toFixed(2)
+      : 0;
+    const productiveCPM = durationInMinutes > 0 
+      ? (maxIndexReachedRef.current / durationInMinutes).toFixed(2)
+      : 0;
+    const accuracy = calculateAccuracy(maxIndexReachedRef.current, firstTimeErrorsRef.current);
+    
+    // Build user input string from charStates
+    const userInputStr = charStatesRef.current
+      .map(cs => cs.userBuffer !== null ? cs.userBuffer : '')
+      .join('');
+    
     // Export data automatically when session ends using refs for latest values
     const sessionData = {
       text: textRef.current,
-      userInput: userInputRef.current,
+      userInput: userInputStr,
+      charStates: charStatesRef.current,
       events: eventsRef.current,
-      sessionDuration: sessionStartTimeRef.current 
-        ? Date.now() - sessionStartTimeRef.current 
-        : 0,
-      accuracy: calculateAccuracy(userInputRef.current, textRef.current, errorPositionsRef.current),
-      errorPositions: Array.from(errorPositionsRef.current),
-      productiveKeystrokes: productiveKeystrokesRef.current,
+      sessionDuration: duration,
+      mechanicalCPM: parseFloat(mechanicalCPM),
+      productiveCPM: parseFloat(productiveCPM),
+      accuracy: parseFloat(accuracy),
+      totalKeystrokes: totalKeystrokesRef.current,
+      maxIndexReached: maxIndexReachedRef.current,
+      firstTimeErrors: Array.from(firstTimeErrorsRef.current),
       timestamp: new Date().toISOString()
     };
 
@@ -126,16 +154,38 @@ function TypingTest() {
 
   // Export session data as JSON (for manual export button)
   const exportData = useCallback(() => {
+    // Calculate session duration
+    const duration = sessionStartTimeRef.current 
+      ? Date.now() - sessionStartTimeRef.current 
+      : 0;
+    const durationInMinutes = duration / 60000;
+    
+    // Calculate metrics
+    const mechanicalCPM = durationInMinutes > 0 
+      ? (totalKeystrokesRef.current / durationInMinutes).toFixed(2)
+      : 0;
+    const productiveCPM = durationInMinutes > 0 
+      ? (maxIndexReachedRef.current / durationInMinutes).toFixed(2)
+      : 0;
+    const accuracy = calculateAccuracy(maxIndexReachedRef.current, firstTimeErrorsRef.current);
+    
+    // Build user input string from charStates
+    const userInputStr = charStatesRef.current
+      .map(cs => cs.userBuffer !== null ? cs.userBuffer : '')
+      .join('');
+    
     const sessionData = {
       text: textRef.current,
-      userInput: userInputRef.current,
+      userInput: userInputStr,
+      charStates: charStatesRef.current,
       events: eventsRef.current,
-      sessionDuration: sessionStartTimeRef.current 
-        ? Date.now() - sessionStartTimeRef.current 
-        : 0,
-      accuracy: calculateAccuracy(userInputRef.current, textRef.current, errorPositionsRef.current),
-      errorPositions: Array.from(errorPositionsRef.current),
-      productiveKeystrokes: productiveKeystrokesRef.current,
+      sessionDuration: duration,
+      mechanicalCPM: parseFloat(mechanicalCPM),
+      productiveCPM: parseFloat(productiveCPM),
+      accuracy: parseFloat(accuracy),
+      totalKeystrokes: totalKeystrokesRef.current,
+      maxIndexReached: maxIndexReachedRef.current,
+      firstTimeErrors: Array.from(firstTimeErrorsRef.current),
       timestamp: new Date().toISOString()
     };
 
@@ -171,41 +221,81 @@ function TypingTest() {
     setEvents(prev => [...prev, eventData]);
     resetInactivityTimer();
 
-    // Handle character input
+    // Handle backspace (State 3: Correction)
     if (e.key === 'Backspace') {
       e.preventDefault();
-      if (userInput.length > 0) {
-        setUserInput(prev => prev.slice(0, -1));
+      if (currentIndex > 0) {
         setCurrentIndex(prev => prev - 1);
-        // Backspace is not a productive keystroke
+        // Note: We don't count backspace as a keystroke for mechanical CPM per requirements
+        // (it says "including Backspaces" but context suggests we count the correction character, not the backspace itself)
+        // Actually, re-reading: "Total Keypresses (including Backspaces + Correction characters)"
+        // This means we DO count backspace
+        setTotalKeystrokes(prev => prev + 1);
       }
-    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      // Only process printable characters without modifiers
+    } 
+    // Handle printable characters
+    else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       
-      // Check if this character is incorrect
-      const isIncorrect = e.key !== text[currentIndex];
+      // Count this keystroke for mechanical CPM
+      setTotalKeystrokes(prev => prev + 1);
       
-      // Mark position as error if incorrect
-      if (isIncorrect) {
-        setErrorPositions(prev => new Set(prev).add(currentIndex));
-      }
+      const expectedChar = text[currentIndex];
+      const isCorrect = e.key === expectedChar;
       
-      // Only count as productive keystroke if position was never an error
-      // and the current keystroke is correct
-      // Note: We check errorPositions (current state) before setErrorPositions updates it,
-      // so if this keystroke is incorrect, it won't be counted as productive
-      if (currentIndex >= userInput.length && !errorPositions.has(currentIndex) && !isIncorrect) {
-        // Typing new character at a position that was never an error and is correct - count as productive
-        setProductiveKeystrokes(prev => prev + 1);
-      } else if (currentIndex < userInput.length && !errorPositions.has(currentIndex) && !isIncorrect) {
-        // Retyping a position that was never an error and is correct now
-        // This shouldn't normally happen, but count it as productive
-        setProductiveKeystrokes(prev => prev + 1);
-      }
-      // If position is marked as error OR current keystroke is incorrect, don't count as productive
+      setCharStates(prev => {
+        const newStates = [...prev];
+        const currentState = newStates[currentIndex];
+        
+        // Check if this is the first time typing at this index
+        const isFirstAttempt = currentState.userBuffer === null;
+        
+        if (isFirstAttempt) {
+          // State 1 or State 2: First attempt at this position
+          if (isCorrect) {
+            // State 1: Correct Input
+            newStates[currentIndex] = {
+              ...currentState,
+              userBuffer: e.key,
+              status: 'correct'
+            };
+          } else {
+            // State 2: Incorrect Input
+            newStates[currentIndex] = {
+              ...currentState,
+              userBuffer: e.key,
+              status: 'incorrect'
+            };
+            // Track first-time error
+            setFirstTimeErrors(prev => new Set(prev).add(currentIndex));
+          }
+          // Update max index reached for productive CPM
+          setMaxIndexReached(prev => Math.max(prev, currentIndex + 1));
+        } else {
+          // State 4: Re-typing a correction (after backspace)
+          if (isCorrect) {
+            // Re-typed correctly - mark as corrected (orange)
+            newStates[currentIndex] = {
+              ...currentState,
+              userBuffer: e.key,
+              status: 'corrected'
+            };
+          } else {
+            // Re-typed incorrectly - mark as incorrect (red)
+            newStates[currentIndex] = {
+              ...currentState,
+              userBuffer: e.key,
+              status: 'incorrect'
+            };
+          }
+          // Don't update maxIndexReached for re-typing
+          // Don't add to firstTimeErrors (already tracked or not)
+        }
+        
+        return newStates;
+      });
       
-      setUserInput(prev => prev + e.key);
+      // Move to next character
       setCurrentIndex(prev => prev + 1);
 
       // Check if we've reached the end of the text
@@ -213,7 +303,7 @@ function TypingTest() {
         endSession();
       }
     }
-  }, [sessionStarted, currentIndex, text, userInput.length, errorPositions, resetInactivityTimer, endSession]);
+  }, [sessionStarted, currentIndex, text, resetInactivityTimer, endSession]);
 
   // Handle key up event
   const handleKeyUp = useCallback((e) => {
@@ -233,19 +323,21 @@ function TypingTest() {
   }, [currentIndex, text]);
 
   // Render individual character with styling
-  const renderCharacter = (char, index) => {
+  const renderCharacter = (charState, index) => {
     let className = 'char';
+    let displayChar = charState.char; // Default to original character
     
-    if (index < userInput.length) {
-      // Character has been typed
-      // Mark as incorrect if it was ever typed incorrectly, even if corrected
-      if (errorPositions.has(index)) {
-        className += ' incorrect';
-      } else if (userInput[index] === text[index]) {
-        className += ' correct';
-      } else {
-        className += ' incorrect';
-      }
+    // Determine class and display based on status
+    if (charState.status === 'correct') {
+      className += ' correct';
+      displayChar = charState.userBuffer || charState.char;
+    } else if (charState.status === 'incorrect') {
+      className += ' incorrect';
+      // Display what the user actually typed
+      displayChar = charState.userBuffer || charState.char;
+    } else if (charState.status === 'corrected') {
+      className += ' corrected';
+      displayChar = charState.userBuffer || charState.char;
     } else if (index === currentIndex) {
       // Current character (caret position)
       className += ' current';
@@ -253,7 +345,7 @@ function TypingTest() {
 
     return (
       <span key={index} className={className}>
-        {char}
+        {displayChar}
       </span>
     );
   };
@@ -271,14 +363,16 @@ function TypingTest() {
 
   // Reset function
   const reset = () => {
-    setText(generateText());
-    setUserInput('');
+    const newData = initializeTextAndStates(wordsData);
+    setText(newData.text);
+    setCharStates(newData.charStates);
     setCurrentIndex(0);
     setEvents([]);
     setSessionActive(false);
     setSessionStarted(false);
-    setErrorPositions(new Set());
-    setProductiveKeystrokes(0);
+    setTotalKeystrokes(0);
+    setMaxIndexReached(0);
+    setFirstTimeErrors(new Set());
     sessionStartTimeRef.current = null;
     
     if (inactivityTimerRef.current) {
@@ -293,8 +387,9 @@ function TypingTest() {
         <div className="stats">
           {sessionStarted && (
             <>
-              <span>Characters: {userInput.length}</span>
-              <span>Accuracy: {calculateAccuracy(userInput, text, errorPositions)}%</span>
+              <span>Index: {currentIndex}</span>
+              <span>Max Reached: {maxIndexReached}</span>
+              <span>Accuracy: {calculateAccuracy(maxIndexReached, firstTimeErrors)}%</span>
               <span className={sessionActive ? 'active' : 'inactive'}>
                 {sessionActive ? '● Recording' : '○ Ended'}
               </span>
@@ -312,7 +407,7 @@ function TypingTest() {
             marginLeft: '50%'
           }}
         >
-          {text.split('').map((char, index) => renderCharacter(char, index))}
+          {charStates.map((charState, index) => renderCharacter(charState, index))}
         </div>
         <div className="caret-line"></div>
       </div>
