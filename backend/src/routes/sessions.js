@@ -119,8 +119,9 @@ router.post('/', (req, res) => {
     } = req.body;
     
     // Validate required fields
-    if (!userId || !mode || !modeValue || !text || !userInput || !events || 
-        sessionDuration === undefined || accuracy === undefined || !timestamp) {
+    if (!userId || !mode || modeValue === undefined || !text || !userInput || 
+        !Array.isArray(events) || sessionDuration === undefined || 
+        accuracy === undefined || !timestamp) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     

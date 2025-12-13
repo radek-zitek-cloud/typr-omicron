@@ -16,6 +16,9 @@ This project provides a web-based typing test application that records detailed 
 - **Backspace Support**: Full support for corrections and backtracking
 - **Performance Metrics**: Real-time accuracy and character count display
 - **Accurate Duration Tracking**: Session duration excludes trailing time after the last keystroke
+- **Database Persistence**: SQLite backend stores user profiles, settings, and session history
+- **User Profiles**: Multiple user support with individual settings and session tracking
+- **Fallback Storage**: Automatic fallback to localStorage when backend is unavailable
 
 ### V2 Analytics Features
 
@@ -25,6 +28,17 @@ This project provides a web-based typing test application that records detailed 
 - **Shift Key Penalty**: Measures the biomechanical cost of using capital letters compared to lowercase
 
 ## Getting Started
+
+### Quick Start
+
+```bash
+# Clone and start the application
+git clone https://github.com/radek-zitek-cloud/typr-omicron.git
+cd typr-omicron
+./start.sh
+```
+
+This will install dependencies (if needed) and start both backend and frontend servers.
 
 ### Prerequisites
 

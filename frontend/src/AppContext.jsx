@@ -48,23 +48,31 @@ export function AppProvider({ children }) {
   
   // Load initial users from localStorage or backend
   const [currentUser, setCurrentUser] = useState(() => {
-    const storedUsers = localStorage.getItem('typr_users');
-    const storedCurrentUserId = localStorage.getItem('typr_current_user');
-    
-    if (storedUsers) {
-      const parsedUsers = JSON.parse(storedUsers);
-      if (storedCurrentUserId) {
-        const user = parsedUsers.find(u => u.userId === storedCurrentUserId);
-        return user || DEFAULT_USER;
+    try {
+      const storedUsers = localStorage.getItem('typr_users');
+      const storedCurrentUserId = localStorage.getItem('typr_current_user');
+      
+      if (storedUsers) {
+        const parsedUsers = JSON.parse(storedUsers);
+        if (storedCurrentUserId) {
+          const user = parsedUsers.find(u => u.userId === storedCurrentUserId);
+          return user || DEFAULT_USER;
+        }
       }
+    } catch (error) {
+      console.error('Failed to load user from localStorage:', error);
     }
     return DEFAULT_USER;
   });
   
   const [users, setUsers] = useState(() => {
-    const storedUsers = localStorage.getItem('typr_users');
-    if (storedUsers) {
-      return JSON.parse(storedUsers);
+    try {
+      const storedUsers = localStorage.getItem('typr_users');
+      if (storedUsers) {
+        return JSON.parse(storedUsers);
+      }
+    } catch (error) {
+      console.error('Failed to load users from localStorage:', error);
     }
     return [DEFAULT_USER];
   });
@@ -267,8 +275,13 @@ export function AppProvider({ children }) {
     // Fallback to localStorage
     return currentUser.sessions
       .map(sessionId => {
-        const sessionData = localStorage.getItem(`typr_session_${sessionId}`);
-        return sessionData ? JSON.parse(sessionData) : null;
+        try {
+          const sessionData = localStorage.getItem(`typr_session_${sessionId}`);
+          return sessionData ? JSON.parse(sessionData) : null;
+        } catch (error) {
+          console.error(`Failed to parse session ${sessionId}:`, error);
+          return null;
+        }
       })
       .filter(session => session !== null);
   };
