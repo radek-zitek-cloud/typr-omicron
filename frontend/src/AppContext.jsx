@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import apiService from './apiService';
 
 const AppContext = createContext();
 
@@ -25,7 +26,27 @@ const DEFAULT_USER = {
 };
 
 export function AppProvider({ children }) {
-  // Load initial users from localStorage
+  const [useBackend, setUseBackend] = useState(false);
+  const [backendReady, setBackendReady] = useState(false);
+  
+  // Check if backend is available
+  useEffect(() => {
+    const checkBackend = async () => {
+      const isHealthy = await apiService.checkHealth();
+      setBackendReady(isHealthy);
+      setUseBackend(isHealthy);
+      
+      if (isHealthy) {
+        console.log('Backend connected - using database storage');
+      } else {
+        console.log('Backend unavailable - using localStorage');
+      }
+    };
+    
+    checkBackend();
+  }, []);
+  
+  // Load initial users from localStorage or backend
   const [currentUser, setCurrentUser] = useState(() => {
     const storedUsers = localStorage.getItem('typr_users');
     const storedCurrentUserId = localStorage.getItem('typr_current_user');
@@ -69,7 +90,7 @@ export function AppProvider({ children }) {
     }
   }, [currentUser]);
 
-  const createUser = (username) => {
+  const createUser = async (username) => {
     const newUser = {
       userId: `user_${Date.now()}`,
       username,
@@ -82,19 +103,59 @@ export function AppProvider({ children }) {
       sessions: []
     };
     
+    // Try to save to backend if available
+    if (useBackend) {
+      try {
+        const createdUser = await apiService.createUser(username);
+        const userWithSettings = {
+          userId: createdUser.user_id,
+          username: createdUser.username,
+          settings: newUser.settings,
+          sessions: []
+        };
+        setUsers(prev => [...prev, userWithSettings]);
+        setCurrentUser(userWithSettings);
+        return userWithSettings;
+      } catch (error) {
+        console.error('Failed to create user in backend, using localStorage:', error);
+      }
+    }
+    
+    // Fallback to localStorage
     setUsers(prev => [...prev, newUser]);
     setCurrentUser(newUser);
     return newUser;
   };
 
-  const switchUser = (userId) => {
+  const switchUser = async (userId) => {
+    // Try to load from backend if available
+    if (useBackend) {
+      try {
+        const backendUser = await apiService.getUser(userId);
+        const settings = await apiService.getSettings(userId);
+        
+        const user = {
+          userId: backendUser.user_id,
+          username: backendUser.username,
+          settings,
+          sessions: []
+        };
+        
+        setCurrentUser(user);
+        return;
+      } catch (error) {
+        console.error('Failed to load user from backend, using localStorage:', error);
+      }
+    }
+    
+    // Fallback to localStorage
     const user = users.find(u => u.userId === userId);
     if (user) {
       setCurrentUser(user);
     }
   };
 
-  const updateUserSettings = (settings) => {
+  const updateUserSettings = async (settings) => {
     if (!currentUser) return;
     
     const updatedUser = {
@@ -105,13 +166,28 @@ export function AppProvider({ children }) {
       }
     };
     
+    // Try to save to backend if available
+    if (useBackend) {
+      try {
+        await apiService.updateSettings(currentUser.userId, settings);
+        setCurrentUser(updatedUser);
+        setUsers(prev => prev.map(u => 
+          u.userId === currentUser.userId ? updatedUser : u
+        ));
+        return;
+      } catch (error) {
+        console.error('Failed to update settings in backend, using localStorage:', error);
+      }
+    }
+    
+    // Fallback to localStorage
     setCurrentUser(updatedUser);
     setUsers(prev => prev.map(u => 
       u.userId === currentUser.userId ? updatedUser : u
     ));
   };
 
-  const saveSession = (sessionData) => {
+  const saveSession = async (sessionData) => {
     if (!currentUser) return;
     
     const sessionId = `session_${Date.now()}`;
@@ -123,7 +199,26 @@ export function AppProvider({ children }) {
       modeValue: testConfig.mode === 'time' ? testConfig.timeLimit : testConfig.wordCount
     };
     
-    // Save to localStorage
+    // Try to save to backend if available
+    if (useBackend) {
+      try {
+        await apiService.createSession(sessionWithId);
+        // Update user's session list in state
+        const updatedUser = {
+          ...currentUser,
+          sessions: [sessionId, ...currentUser.sessions]
+        };
+        setCurrentUser(updatedUser);
+        setUsers(prev => prev.map(u => 
+          u.userId === currentUser.userId ? updatedUser : u
+        ));
+        return sessionId;
+      } catch (error) {
+        console.error('Failed to save session to backend, using localStorage:', error);
+      }
+    }
+    
+    // Fallback to localStorage
     localStorage.setItem(`typr_session_${sessionId}`, JSON.stringify(sessionWithId));
     
     // Update user's session list
@@ -140,16 +235,41 @@ export function AppProvider({ children }) {
     return sessionId;
   };
 
-  const getSession = (sessionId) => {
+  const getSession = async (sessionId) => {
+    // Try to load from backend if available
+    if (useBackend) {
+      try {
+        const session = await apiService.getSession(sessionId);
+        return session;
+      } catch (error) {
+        console.error('Failed to load session from backend, using localStorage:', error);
+      }
+    }
+    
+    // Fallback to localStorage
     const sessionData = localStorage.getItem(`typr_session_${sessionId}`);
     return sessionData ? JSON.parse(sessionData) : null;
   };
 
-  const getUserSessions = () => {
+  const getUserSessions = async () => {
     if (!currentUser) return [];
     
+    // Try to load from backend if available
+    if (useBackend) {
+      try {
+        const sessions = await apiService.getUserSessions(currentUser.userId);
+        return sessions;
+      } catch (error) {
+        console.error('Failed to load sessions from backend, using localStorage:', error);
+      }
+    }
+    
+    // Fallback to localStorage
     return currentUser.sessions
-      .map(sessionId => getSession(sessionId))
+      .map(sessionId => {
+        const sessionData = localStorage.getItem(`typr_session_${sessionId}`);
+        return sessionData ? JSON.parse(sessionData) : null;
+      })
       .filter(session => session !== null);
   };
 
@@ -163,7 +283,9 @@ export function AppProvider({ children }) {
     updateUserSettings,
     saveSession,
     getSession,
-    getUserSessions
+    getUserSessions,
+    useBackend,
+    backendReady
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
