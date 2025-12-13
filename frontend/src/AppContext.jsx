@@ -18,7 +18,8 @@ const DEFAULT_USER = {
   settings: {
     font: 'Courier New',
     fontSize: 'M',
-    theme: 'dark'
+    theme: 'dark',
+    soundEnabled: false
   },
   sessions: []
 };
@@ -75,7 +76,8 @@ export function AppProvider({ children }) {
       settings: {
         font: 'Courier New',
         fontSize: 'M',
-        theme: 'dark'
+        theme: 'dark',
+        soundEnabled: false
       },
       sessions: []
     };

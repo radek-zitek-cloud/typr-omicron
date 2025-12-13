@@ -28,6 +28,10 @@ function Settings() {
     updateUserSettings({ fontSize: size });
   };
 
+  const handleSoundToggle = (e) => {
+    updateUserSettings({ soundEnabled: e.target.checked });
+  };
+
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -97,6 +101,25 @@ function Settings() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h2>Audio Feedback</h2>
+          
+          <div className="setting-item">
+            <label htmlFor="sound-toggle">
+              <input
+                type="checkbox"
+                id="sound-toggle"
+                checked={currentUser?.settings.soundEnabled || false}
+                onChange={handleSoundToggle}
+              />
+              <span style={{ marginLeft: '8px' }}>Enable sound effects</span>
+            </label>
+            <p className="help-text">
+              Play sound when keys are pressed (different sounds for correct and incorrect keys)
+            </p>
           </div>
         </div>
 
