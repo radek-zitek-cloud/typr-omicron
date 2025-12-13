@@ -578,15 +578,18 @@ function Analyzer() {
 
   // Load session from query parameter
   useEffect(() => {
-    const sessionId = searchParams.get('session');
-    if (sessionId && getSession) {
-      const session = getSession(sessionId);
-      if (session) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setSessionData(session);
-        analyzeData(session);
+    const loadSession = async () => {
+      const sessionId = searchParams.get('session');
+      if (sessionId && getSession) {
+        const session = await getSession(sessionId);
+        if (session) {
+          setSessionData(session);
+          analyzeData(session);
+        }
       }
-    }
+    };
+    
+    loadSession();
   }, [searchParams, getSession, analyzeData]);
 
   const handleFileUpload = (event) => {
