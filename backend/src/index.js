@@ -20,15 +20,6 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.'
 });
 
-// Stricter rate limit for write operations
-const writeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // Limit each IP to 50 write requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: 'Too many write requests from this IP, please try again later.'
-});
-
 // Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -36,25 +27,18 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 
-// Apply rate limiting to all API routes
-app.use('/api/', limiter);
-
-// Health check endpoint
+// Health check endpoint (no rate limiting)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Apply rate limiting to all API routes
+app.use('/api/', limiter);
 
 // API routes
 app.use('/api/users', usersRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/sessions', sessionsRouter);
-
-// Apply stricter rate limiting to write operations
-app.post('/api/users', writeLimiter);
-app.post('/api/sessions', writeLimiter);
-app.put('/api/settings/:userId', writeLimiter);
-app.delete('/api/users/:userId', writeLimiter);
-app.delete('/api/sessions/:sessionId', writeLimiter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

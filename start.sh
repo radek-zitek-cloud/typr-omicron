@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Start script for Typr Omicron
 # Starts both backend and frontend servers

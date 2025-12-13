@@ -32,23 +32,30 @@ router.get('/user/:userId', (req, res) => {
     
     const sessions = db.prepare(query).all(...params);
     
-    // Parse JSON fields
-    const formattedSessions = sessions.map(session => ({
-      sessionId: session.session_id,
-      userId: session.user_id,
-      mode: session.mode,
-      modeValue: session.mode_value,
-      text: session.text,
-      userInput: session.user_input,
-      events: JSON.parse(session.events),
-      sessionDuration: session.session_duration,
-      accuracy: session.accuracy,
-      maxIndexReached: session.max_index_reached,
-      mechanicalCPM: session.mechanical_cpm,
-      productiveCPM: session.productive_cpm,
-      charStates: session.char_states ? JSON.parse(session.char_states) : null,
-      timestamp: session.timestamp
-    }));
+    // Parse JSON fields with error handling
+    const formattedSessions = sessions.map(session => {
+      try {
+        return {
+          sessionId: session.session_id,
+          userId: session.user_id,
+          mode: session.mode,
+          modeValue: session.mode_value,
+          text: session.text,
+          userInput: session.user_input,
+          events: JSON.parse(session.events),
+          sessionDuration: session.session_duration,
+          accuracy: session.accuracy,
+          maxIndexReached: session.max_index_reached,
+          mechanicalCPM: session.mechanical_cpm,
+          productiveCPM: session.productive_cpm,
+          charStates: session.char_states ? JSON.parse(session.char_states) : null,
+          timestamp: session.timestamp
+        };
+      } catch (parseError) {
+        console.error(`Error parsing session ${session.session_id}:`, parseError);
+        return null;
+      }
+    }).filter(session => session !== null);
     
     res.json(formattedSessions);
   } catch (error) {
@@ -74,25 +81,30 @@ router.get('/:sessionId', (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
     
-    // Parse JSON fields
-    const formattedSession = {
-      sessionId: session.session_id,
-      userId: session.user_id,
-      mode: session.mode,
-      modeValue: session.mode_value,
-      text: session.text,
-      userInput: session.user_input,
-      events: JSON.parse(session.events),
-      sessionDuration: session.session_duration,
-      accuracy: session.accuracy,
-      maxIndexReached: session.max_index_reached,
-      mechanicalCPM: session.mechanical_cpm,
-      productiveCPM: session.productive_cpm,
-      charStates: session.char_states ? JSON.parse(session.char_states) : null,
-      timestamp: session.timestamp
-    };
-    
-    res.json(formattedSession);
+    // Parse JSON fields with error handling
+    try {
+      const formattedSession = {
+        sessionId: session.session_id,
+        userId: session.user_id,
+        mode: session.mode,
+        modeValue: session.mode_value,
+        text: session.text,
+        userInput: session.user_input,
+        events: JSON.parse(session.events),
+        sessionDuration: session.session_duration,
+        accuracy: session.accuracy,
+        maxIndexReached: session.max_index_reached,
+        mechanicalCPM: session.mechanical_cpm,
+        productiveCPM: session.productive_cpm,
+        charStates: session.char_states ? JSON.parse(session.char_states) : null,
+        timestamp: session.timestamp
+      };
+      
+      res.json(formattedSession);
+    } catch (parseError) {
+      console.error(`Error parsing session ${sessionId}:`, parseError);
+      return res.status(500).json({ error: 'Failed to parse session data' });
+    }
   } catch (error) {
     console.error('Error fetching session:', error);
     res.status(500).json({ error: 'Failed to fetch session' });

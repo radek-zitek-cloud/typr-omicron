@@ -1,6 +1,7 @@
 // API service for communicating with the backend
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const BACKEND_BASE_URL = API_BASE_URL.substring(0, API_BASE_URL.lastIndexOf('/'));
 
 class ApiService {
   // Users API
@@ -112,7 +113,7 @@ class ApiService {
   // Health check
   async checkHealth() {
     try {
-      const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health`);
+      const response = await fetch(`${BACKEND_BASE_URL}/health`);
       if (!response.ok) {
         return false;
       }
