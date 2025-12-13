@@ -69,24 +69,33 @@ function Analyzer() {
   };
 
   const calculateStatistics = (data) => {
-    const { sessionDuration, text, userInput } = data;
+    const { sessionDuration, text, userInput, productiveKeystrokes, errorPositions } = data;
     
-    // Count characters typed (excluding spaces)
+    // Use productive keystrokes if available, otherwise fall back to userInput length
+    const effectiveKeystrokes = productiveKeystrokes !== undefined 
+      ? productiveKeystrokes 
+      : userInput.length;
+    
+    // Count characters typed (excluding spaces) from productive keystrokes
     const charsNoSpaces = userInput.replace(/ /g, '').length;
     
-    // Calculate CPM (characters per minute, excluding spaces)
+    // Calculate CPM (characters per minute, based on productive keystrokes)
     const minutes = sessionDuration / 60000;
-    const cpm = minutes > 0 ? (charsNoSpaces / minutes).toFixed(2) : 0;
+    const cpm = minutes > 0 ? (effectiveKeystrokes / minutes).toFixed(2) : 0;
     
-    // Calculate WPM (words per minute)
-    const words = userInput.trim().split(/\s+/).filter(w => w.length > 0).length;
-    const wpm = minutes > 0 ? (words / minutes).toFixed(2) : 0;
+    // Calculate WPM (words per minute, based on productive keystrokes)
+    // Using standard assumption of 5 characters per word for consistent WPM calculation
+    const CHARS_PER_WORD = 5;
+    const wpm = minutes > 0 ? (effectiveKeystrokes / CHARS_PER_WORD / minutes).toFixed(2) : 0;
     
-    // Calculate accuracy
+    // Calculate accuracy using error positions if available
     let correct = 0;
     const minLength = Math.min(userInput.length, text.length);
+    const errPositionsSet = errorPositions ? new Set(errorPositions) : new Set();
+    
     for (let i = 0; i < minLength; i++) {
-      if (userInput[i] === text[i]) {
+      // Character is correct only if it matches AND was never an error
+      if (userInput[i] === text[i] && !errPositionsSet.has(i)) {
         correct++;
       }
     }
@@ -98,7 +107,7 @@ function Analyzer() {
       accuracy,
       totalChars: userInput.length,
       charsNoSpaces,
-      words,
+      productiveKeystrokes: effectiveKeystrokes,
       sessionDuration: (sessionDuration / 1000).toFixed(2)
     };
   };
@@ -258,11 +267,11 @@ function Analyzer() {
               <h2>Basic Statistics</h2>
               <div className="stats-grid">
                 <div className="stat-item">
-                  <span className="stat-label">Characters Per Minute (excl. spaces):</span>
+                  <span className="stat-label">Characters Per Minute (productive):</span>
                   <span className="stat-value">{statistics.cpm}</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-label">Words Per Minute:</span>
+                  <span className="stat-label">Words Per Minute (productive):</span>
                   <span className="stat-value">{statistics.wpm}</span>
                 </div>
                 <div className="stat-item">
@@ -278,8 +287,8 @@ function Analyzer() {
                   <span className="stat-value">{statistics.totalChars}</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-label">Words Typed:</span>
-                  <span className="stat-value">{statistics.words}</span>
+                  <span className="stat-label">Productive Keystrokes:</span>
+                  <span className="stat-value">{statistics.productiveKeystrokes}</span>
                 </div>
               </div>
             </div>

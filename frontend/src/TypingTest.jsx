@@ -27,18 +27,26 @@ function TypingTest() {
   const sessionStartTimeRef = useRef(null);
   const textDisplayRef = useRef(null);
   const [charWidth, setCharWidth] = useState(SCROLL_SPEED_MULTIPLIER);
+  // Track which positions have been typed incorrectly at least once
+  const [errorPositions, setErrorPositions] = useState(new Set());
+  // Track productive keystrokes (excluding backspace and corrections)
+  const [productiveKeystrokes, setProductiveKeystrokes] = useState(0);
   
   // Refs to store latest values for timeout callback
   const textRef = useRef(text);
   const userInputRef = useRef(userInput);
   const eventsRef = useRef(events);
+  const errorPositionsRef = useRef(errorPositions);
+  const productiveKeystrokesRef = useRef(productiveKeystrokes);
   
   // Update refs when state changes
   useEffect(() => {
     textRef.current = text;
     userInputRef.current = userInput;
     eventsRef.current = events;
-  }, [text, userInput, events]);
+    errorPositionsRef.current = errorPositions;
+    productiveKeystrokesRef.current = productiveKeystrokes;
+  }, [text, userInput, events, errorPositions, productiveKeystrokes]);
 
   // Measure character width for precise scrolling
   useEffect(() => {
@@ -60,12 +68,13 @@ function TypingTest() {
     }
   }, [text]); // Recalculate when text changes
 
-  // Calculate accuracy
-  const calculateAccuracy = (input, targetText) => {
+  // Calculate accuracy - characters marked as incorrect stay incorrect even after correction
+  const calculateAccuracy = (input, targetText, errPositions) => {
     if (input.length === 0) return 100;
     let correct = 0;
     for (let i = 0; i < input.length; i++) {
-      if (input[i] === targetText[i]) {
+      // A character is correct only if it matches AND was never typed incorrectly
+      if (input[i] === targetText[i] && !errPositions.has(i)) {
         correct++;
       }
     }
@@ -88,7 +97,9 @@ function TypingTest() {
       sessionDuration: sessionStartTimeRef.current 
         ? Date.now() - sessionStartTimeRef.current 
         : 0,
-      accuracy: calculateAccuracy(userInputRef.current, textRef.current),
+      accuracy: calculateAccuracy(userInputRef.current, textRef.current, errorPositionsRef.current),
+      errorPositions: Array.from(errorPositionsRef.current),
+      productiveKeystrokes: productiveKeystrokesRef.current,
       timestamp: new Date().toISOString()
     };
 
@@ -122,7 +133,9 @@ function TypingTest() {
       sessionDuration: sessionStartTimeRef.current 
         ? Date.now() - sessionStartTimeRef.current 
         : 0,
-      accuracy: calculateAccuracy(userInputRef.current, textRef.current),
+      accuracy: calculateAccuracy(userInputRef.current, textRef.current, errorPositionsRef.current),
+      errorPositions: Array.from(errorPositionsRef.current),
+      productiveKeystrokes: productiveKeystrokesRef.current,
       timestamp: new Date().toISOString()
     };
 
@@ -164,10 +177,34 @@ function TypingTest() {
       if (userInput.length > 0) {
         setUserInput(prev => prev.slice(0, -1));
         setCurrentIndex(prev => prev - 1);
+        // Backspace is not a productive keystroke
       }
     } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       // Only process printable characters without modifiers
       e.preventDefault();
+      
+      // Check if this character is incorrect
+      const isIncorrect = e.key !== text[currentIndex];
+      
+      // Mark position as error if incorrect
+      if (isIncorrect) {
+        setErrorPositions(prev => new Set(prev).add(currentIndex));
+      }
+      
+      // Only count as productive keystroke if position was never an error
+      // and the current keystroke is correct
+      // Note: We check errorPositions (current state) before setErrorPositions updates it,
+      // so if this keystroke is incorrect, it won't be counted as productive
+      if (currentIndex >= userInput.length && !errorPositions.has(currentIndex) && !isIncorrect) {
+        // Typing new character at a position that was never an error and is correct - count as productive
+        setProductiveKeystrokes(prev => prev + 1);
+      } else if (currentIndex < userInput.length && !errorPositions.has(currentIndex) && !isIncorrect) {
+        // Retyping a position that was never an error and is correct now
+        // This shouldn't normally happen, but count it as productive
+        setProductiveKeystrokes(prev => prev + 1);
+      }
+      // If position is marked as error OR current keystroke is incorrect, don't count as productive
+      
       setUserInput(prev => prev + e.key);
       setCurrentIndex(prev => prev + 1);
 
@@ -176,7 +213,7 @@ function TypingTest() {
         endSession();
       }
     }
-  }, [sessionStarted, currentIndex, text, userInput.length, resetInactivityTimer, endSession]);
+  }, [sessionStarted, currentIndex, text, userInput.length, errorPositions, resetInactivityTimer, endSession]);
 
   // Handle key up event
   const handleKeyUp = useCallback((e) => {
@@ -201,7 +238,10 @@ function TypingTest() {
     
     if (index < userInput.length) {
       // Character has been typed
-      if (userInput[index] === text[index]) {
+      // Mark as incorrect if it was ever typed incorrectly, even if corrected
+      if (errorPositions.has(index)) {
+        className += ' incorrect';
+      } else if (userInput[index] === text[index]) {
         className += ' correct';
       } else {
         className += ' incorrect';
@@ -237,6 +277,8 @@ function TypingTest() {
     setEvents([]);
     setSessionActive(false);
     setSessionStarted(false);
+    setErrorPositions(new Set());
+    setProductiveKeystrokes(0);
     sessionStartTimeRef.current = null;
     
     if (inactivityTimerRef.current) {
@@ -252,7 +294,7 @@ function TypingTest() {
           {sessionStarted && (
             <>
               <span>Characters: {userInput.length}</span>
-              <span>Accuracy: {calculateAccuracy(userInput, text)}%</span>
+              <span>Accuracy: {calculateAccuracy(userInput, text, errorPositions)}%</span>
               <span className={sessionActive ? 'active' : 'inactive'}>
                 {sessionActive ? '● Recording' : '○ Ended'}
               </span>
