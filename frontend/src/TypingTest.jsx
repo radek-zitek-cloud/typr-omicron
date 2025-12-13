@@ -4,9 +4,6 @@ import ConfigBar from './ConfigBar';
 import './TypingTest.css';
 import wordsData from './words.json';
 
-// Configuration constants
-const SCROLL_SPEED_MULTIPLIER = 0.6; // Controls how fast the text scrolls (legacy, kept for compatibility)
-
 // Helper function to get word source
 function getWordSource() {
   const customWords = localStorage.getItem('typr_custom_words');
@@ -89,15 +86,16 @@ function TypingTest() {
       if (chars[currentIndex]) {
         // Get the active character's position
         const activeChar = chars[currentIndex];
-        const charRect = activeChar.getBoundingClientRect();
         
-        // Calculate the distance from track start to active character center
-        const charCenterOffset = (activeChar.offsetLeft || 0) + (charRect.width / 2);
+        // Use offsetLeft and offsetWidth to avoid expensive getBoundingClientRect()
+        const charCenterOffset = (activeChar.offsetLeft || 0) + ((activeChar.offsetWidth || 0) / 2);
         
         // We want to center this at 0 (since track is positioned at left: 50%)
         // Transform = negative of the offset to bring it to center
         const newTransform = -charCenterOffset;
         
+        // This is a valid use of setState in effect - we're synchronizing with DOM measurements
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setTrackTransform(newTransform);
       }
     }

@@ -120,14 +120,6 @@
   color: #666;
 }
 
-/* Remove old current class blinking caret - we use overlay instead */
-.char.current {
-  color: #fff;
-  font-weight: bold;
-  opacity: 1;
-  transform: scale(1.1);
-}
-
 @keyframes blink {
   0%, 49% {
     opacity: 1;
