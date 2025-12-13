@@ -3,6 +3,7 @@ import { useAppContext } from './AppContext';
 import ConfigBar from './ConfigBar';
 import './TypingTest.css';
 import wordsData from './words.json';
+import { playCorrectSound, playErrorSound, resumeAudioContext } from './soundUtils';
 
 // Helper function to get word source
 function getWordSource() {
@@ -54,6 +55,7 @@ function TypingTest() {
   const sessionStartTimeRef = useRef(null);
   const lastKeystrokeTimeRef = useRef(null);
   const textDisplayRef = useRef(null);
+  const audioContextResumedRef = useRef(false);
   const [trackTransform, setTrackTransform] = useState(0); // For kinetic tape mode centering
   // Track metrics
   const [totalKeystrokes, setTotalKeystrokes] = useState(0); // Mechanical: all keypresses
@@ -223,6 +225,15 @@ function TypingTest() {
 
   // Handle key down event
   const handleKeyDown = useCallback((e) => {
+    // Resume audio context on first user interaction (required by browsers)
+    if (currentUser?.settings.soundEnabled && !audioContextResumedRef.current) {
+      const resumed = resumeAudioContext();
+      // Only set to true if context is available and resume was initiated or already running
+      if (resumed) {
+        audioContextResumedRef.current = true;
+      }
+    }
+    
     // Prevent actions if we've completed the text (except in time mode where we generate more)
     if (testConfig.mode === 'words' && currentIndex >= text.length) return;
     
@@ -283,6 +294,15 @@ function TypingTest() {
       
       const expectedChar = text[currentIndex];
       const isCorrect = e.key === expectedChar;
+      
+      // Play sound based on correctness
+      if (currentUser?.settings.soundEnabled) {
+        if (isCorrect) {
+          playCorrectSound();
+        } else {
+          playErrorSound();
+        }
+      }
       
       setCharStates(prev => {
         const newStates = [...prev];
@@ -345,7 +365,7 @@ function TypingTest() {
         // The session remains active for the user to end it when ready
       }
     }
-  }, [sessionStarted, sessionActive, currentIndex, text, testConfig]);
+  }, [sessionStarted, sessionActive, currentIndex, text, testConfig, currentUser]);
 
   // Handle key up event
   const handleKeyUp = useCallback((e) => {
