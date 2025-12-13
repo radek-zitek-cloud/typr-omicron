@@ -11,10 +11,11 @@ This project provides a web-based typing test application that records detailed 
 - **Precision Keystroke Tracking**: Records keydown and keyup events with millisecond-level precision
 - **Visual Feedback**: Real-time color-coded feedback (green for correct, red for incorrect)
 - **Smart Text Scrolling**: Keeps the typing caret centered while text scrolls horizontally
-- **Session Management**: Automatic session start on first keystroke and end after 5 seconds of inactivity
+- **Manual Session Control**: End the session with a dedicated "End Session" button when you're ready
 - **Data Export**: Automatic JSON export of complete session data for analysis
 - **Backspace Support**: Full support for corrections and backtracking
 - **Performance Metrics**: Real-time accuracy and character count display
+- **Accurate Duration Tracking**: Session duration excludes trailing time after the last keystroke
 
 ## Getting Started
 
@@ -113,7 +114,6 @@ Each typing session exports a JSON file containing:
 
 See [frontend/README.md](frontend/README.md) for detailed configuration options including:
 - Custom word lists
-- Session timeout adjustment
 - Scroll threshold customization
 
 ## License
