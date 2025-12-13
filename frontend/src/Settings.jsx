@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAppContext } from './AppContext';
+import { getAvailableMonospacedFonts } from './fontDetection';
 import './Settings.css';
 
 /**
@@ -9,15 +10,9 @@ import './Settings.css';
 function Settings() {
   const { currentUser, updateUserSettings } = useAppContext();
   const [pasteText, setPasteText] = useState('');
-
-  const fonts = [
-    { value: 'Courier New', label: 'Courier New (Monospace)' },
-    { value: 'Roboto Mono', label: 'Roboto Mono (Monospace)' },
-    { value: 'Fira Code', label: 'Fira Code (Monospace)' },
-    { value: 'Inter', label: 'Inter (Sans-serif)' },
-    { value: 'Roboto', label: 'Roboto (Sans-serif)' },
-    { value: 'Merriweather', label: 'Merriweather (Serif)' }
-  ];
+  
+  // Detect available monospaced fonts (memoized to avoid re-detection on re-renders)
+  const fonts = useMemo(() => getAvailableMonospacedFonts(), []);
 
   const fontSizes = [
     { value: 'S', label: 'Small' },
