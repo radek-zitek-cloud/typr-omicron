@@ -142,6 +142,20 @@ function TypingTest() {
     URL.revokeObjectURL(url);
   }, [buildSessionData]);
 
+  // Download session data without modifying state (for already-ended sessions)
+  const downloadSessionData = useCallback(() => {
+    const sessionData = buildSessionData();
+
+    const dataStr = JSON.stringify(sessionData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `typing-session-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [buildSessionData]);
+
   // Handle key down event
   const handleKeyDown = useCallback((e) => {
     // Prevent actions if we've completed the text
@@ -373,7 +387,7 @@ function TypingTest() {
           <button onClick={endSession} className="end-session-btn">End Session</button>
         )}
         {sessionStarted && !sessionActive && (
-          <button onClick={endSession}>Download Session Data</button>
+          <button onClick={downloadSessionData}>Download Session Data</button>
         )}
       </div>
     </div>
