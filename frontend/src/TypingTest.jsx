@@ -101,52 +101,20 @@ function TypingTest() {
     }
   }, [text]); // Recalculate when text changes
 
-  // Timer logic for time mode
-  useEffect(() => {
-    if (testConfig.mode === 'time' && sessionActive && timeRemaining !== null) {
-      if (timeRemaining <= 0) {
-        endSession();
-        return;
-      }
-      
-      const timer = setInterval(() => {
-        setTimeRemaining(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      
-      return () => clearInterval(timer);
-    }
-  }, [testConfig.mode, sessionActive, timeRemaining, endSession]);
-
-  // Check word count completion for word mode
-  useEffect(() => {
-    if (testConfig.mode === 'words' && sessionActive) {
-      const targetChars = calculateTargetChars(testConfig.wordCount);
-      if (maxIndexReached >= targetChars) {
-        endSession();
-      }
-    }
-  }, [testConfig.mode, testConfig.wordCount, sessionActive, maxIndexReached, endSession]);
-  
   // Helper to calculate target character count from word count
-  const calculateTargetChars = (wordCount) => {
+  const calculateTargetChars = useCallback((wordCount) => {
     // Approximate: average word length + 1 space
     return wordCount * 6; // Rough estimate
-  };
+  }, []);
 
   // Calculate accuracy - productive accuracy only (first-time attempts)
-  const calculateAccuracy = (maxReached, errors) => {
+  const calculateAccuracy = useCallback((maxReached, errors) => {
     if (maxReached === 0) return 100;
     const productiveChars = maxReached;
     const firstTimeErrorCount = errors.size;
     const correct = productiveChars - firstTimeErrorCount;
     return ((correct / productiveChars) * 100).toFixed(2);
-  };
+  }, []);
 
   // Helper function to build session data for export
   const buildSessionData = useCallback(() => {
@@ -185,7 +153,7 @@ function TypingTest() {
       firstTimeErrors: Array.from(firstTimeErrorsRef.current),
       timestamp: new Date().toISOString()
     };
-  }, []);
+  }, [calculateAccuracy]);
 
   // Helper function to download session data as JSON file
   const downloadSessionFile = useCallback((sessionData) => {
@@ -218,6 +186,40 @@ function TypingTest() {
     const sessionData = buildSessionData();
     downloadSessionFile(sessionData);
   }, [buildSessionData, downloadSessionFile]);
+
+  // Timer logic for time mode
+  useEffect(() => {
+    if (testConfig.mode === 'time' && sessionActive && timeRemaining !== null) {
+      if (timeRemaining <= 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        endSession();
+        return;
+      }
+      
+      const timer = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      return () => clearInterval(timer);
+    }
+  }, [testConfig.mode, sessionActive, timeRemaining, endSession]);
+
+  // Check word count completion for word mode
+  useEffect(() => {
+    if (testConfig.mode === 'words' && sessionActive) {
+      const targetChars = calculateTargetChars(testConfig.wordCount);
+      if (maxIndexReached >= targetChars) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        endSession();
+      }
+    }
+  }, [testConfig.mode, testConfig.wordCount, sessionActive, maxIndexReached, endSession, calculateTargetChars]);
 
   // Handle key down event
   const handleKeyDown = useCallback((e) => {

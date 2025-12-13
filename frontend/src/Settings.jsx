@@ -4,7 +4,6 @@ import './Settings.css';
 
 function Settings() {
   const { currentUser, updateUserSettings } = useAppContext();
-  const [customWordList, setCustomWordList] = useState('');
   const [pasteText, setPasteText] = useState('');
 
   const fonts = [

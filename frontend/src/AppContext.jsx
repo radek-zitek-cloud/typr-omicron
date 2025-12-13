@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 
 const AppContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAppContext() {
   const context = useContext(AppContext);
   if (!context) {
@@ -11,7 +12,6 @@ export function useAppContext() {
   return context;
 }
 
-// Default user profile structure
 const DEFAULT_USER = {
   userId: 'guest',
   username: 'Guest',
@@ -24,35 +24,35 @@ const DEFAULT_USER = {
 };
 
 export function AppProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [users, setUsers] = useState([]);
+  // Load initial users from localStorage
+  const [currentUser, setCurrentUser] = useState(() => {
+    const storedUsers = localStorage.getItem('typr_users');
+    const storedCurrentUserId = localStorage.getItem('typr_current_user');
+    
+    if (storedUsers) {
+      const parsedUsers = JSON.parse(storedUsers);
+      if (storedCurrentUserId) {
+        const user = parsedUsers.find(u => u.userId === storedCurrentUserId);
+        return user || DEFAULT_USER;
+      }
+    }
+    return DEFAULT_USER;
+  });
+  
+  const [users, setUsers] = useState(() => {
+    const storedUsers = localStorage.getItem('typr_users');
+    if (storedUsers) {
+      return JSON.parse(storedUsers);
+    }
+    return [DEFAULT_USER];
+  });
+  
   const [testConfig, setTestConfig] = useState({
     mode: 'time', // 'time' or 'words'
     timeLimit: 60, // in seconds
     wordCount: 50,
     wordSource: 'common1k'
   });
-
-  // Load users and current user from localStorage on mount
-  useEffect(() => {
-    const storedUsers = localStorage.getItem('typr_users');
-    const storedCurrentUserId = localStorage.getItem('typr_current_user');
-    
-    if (storedUsers) {
-      const parsedUsers = JSON.parse(storedUsers);
-      setUsers(parsedUsers);
-      
-      if (storedCurrentUserId) {
-        const user = parsedUsers.find(u => u.userId === storedCurrentUserId);
-        setCurrentUser(user || DEFAULT_USER);
-      } else {
-        setCurrentUser(DEFAULT_USER);
-      }
-    } else {
-      setUsers([DEFAULT_USER]);
-      setCurrentUser(DEFAULT_USER);
-    }
-  }, []);
 
   // Save users to localStorage whenever they change
   useEffect(() => {
