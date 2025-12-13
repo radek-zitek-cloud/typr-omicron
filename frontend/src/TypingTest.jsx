@@ -199,6 +199,8 @@ function TypingTest() {
     if (e.key === 'Backspace') {
       e.preventDefault();
       if (currentIndex > 0) {
+        // Don't reset character state - keep the original char and status history
+        // This allows State 4 logic to determine if it was a first attempt or re-type
         setCurrentIndex(prev => prev - 1);
         // Count backspace in mechanical CPM (total keypresses)
         setTotalKeystrokes(prev => prev + 1);
@@ -296,19 +298,16 @@ function TypingTest() {
   // Render individual character with styling
   const renderCharacter = (charState, index) => {
     let className = 'char';
-    let displayChar = charState.char; // Default to original character
+    // Display user's typed character if available, otherwise show expected character
+    const displayChar = charState.userBuffer || charState.char;
     
-    // Determine class and display based on status
+    // Determine class based on status
     if (charState.status === 'correct') {
       className += ' correct';
-      displayChar = charState.userBuffer || charState.char;
     } else if (charState.status === 'incorrect') {
       className += ' incorrect';
-      // Display what the user actually typed
-      displayChar = charState.userBuffer || charState.char;
     } else if (charState.status === 'corrected') {
       className += ' corrected';
-      displayChar = charState.userBuffer || charState.char;
     } else if (index === currentIndex) {
       // Current character (caret position)
       className += ' current';
