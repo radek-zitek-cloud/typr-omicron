@@ -92,8 +92,8 @@ function TypingTest() {
     // Calculate session duration up to the last keystroke
     // This removes the trailing time between last keystroke and end of session
     const startTime = sessionStartTimeRef.current;
-    const endTime = lastKeystrokeTimeRef.current || sessionStartTimeRef.current;
-    const duration = (startTime && endTime) ? endTime - startTime : 0;
+    const endTime = lastKeystrokeTimeRef.current || sessionStartTimeRef.current || Date.now();
+    const duration = startTime ? endTime - startTime : 0;
     const durationInMinutes = duration / 60000;
     
     // Calculate metrics
@@ -126,12 +126,8 @@ function TypingTest() {
     };
   }, []);
 
-  // End session and export data
-  const endSession = useCallback(() => {
-    setSessionActive(false);
-    
-    const sessionData = buildSessionData();
-
+  // Helper function to download session data as JSON file
+  const downloadSessionFile = useCallback((sessionData) => {
     const dataStr = JSON.stringify(sessionData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
@@ -140,21 +136,20 @@ function TypingTest() {
     link.download = `typing-session-${Date.now()}.json`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [buildSessionData]);
+  }, []);
+
+  // End session and export data
+  const endSession = useCallback(() => {
+    setSessionActive(false);
+    const sessionData = buildSessionData();
+    downloadSessionFile(sessionData);
+  }, [buildSessionData, downloadSessionFile]);
 
   // Download session data without modifying state (for already-ended sessions)
   const downloadSessionData = useCallback(() => {
     const sessionData = buildSessionData();
-
-    const dataStr = JSON.stringify(sessionData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `typing-session-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [buildSessionData]);
+    downloadSessionFile(sessionData);
+  }, [buildSessionData, downloadSessionFile]);
 
   // Handle key down event
   const handleKeyDown = useCallback((e) => {
