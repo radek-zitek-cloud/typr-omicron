@@ -162,3 +162,244 @@
   font-weight: bold;
   color: #2196F3;
 }
+
+/* V2 Analytics: Digraph Latency Styles */
+.digraph-table {
+  margin-top: 20px;
+}
+
+.digraph-table .table-header {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr 0.5fr;
+  gap: 10px;
+  padding: 12px 15px;
+  background: #2196F3;
+  color: white;
+  font-weight: bold;
+  border-radius: 5px 5px 0 0;
+}
+
+.digraph-table .table-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr 0.5fr;
+  gap: 10px;
+  padding: 12px 15px;
+  background: #f9f9f9;
+  border-bottom: 1px solid #e0e0e0;
+  transition: background-color 0.2s;
+}
+
+.digraph-table .table-row:hover {
+  background: #f0f0f0;
+}
+
+.digraph-table .table-row.same-finger {
+  background: #ffebee;
+  border-left: 4px solid #f44336;
+}
+
+.digraph-table .table-row.same-finger:hover {
+  background: #ffcdd2;
+}
+
+.digraph-table .transition-chars {
+  font-weight: bold;
+  font-size: 16px;
+  color: #333;
+}
+
+.digraph-table .finger-change {
+  color: #666;
+  font-size: 14px;
+}
+
+.digraph-table .latency-value {
+  font-weight: bold;
+  color: #2196F3;
+  text-align: right;
+}
+
+.digraph-table .count-value {
+  color: #999;
+  text-align: center;
+}
+
+.info-note {
+  margin-top: 15px;
+  padding: 10px;
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  border-radius: 4px;
+  color: #856404;
+  font-size: 14px;
+}
+
+.same-finger-indicator {
+  color: #f44336;
+  font-weight: bold;
+}
+
+/* V2 Analytics: Error Confusion Matrix Styles */
+.confusion-matrix {
+  margin-top: 20px;
+}
+
+.confusion-item {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 5px;
+  border-left: 4px solid #ff9800;
+}
+
+.confusion-item .expected-char {
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.confusion-item .actual-chars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-left: 20px;
+}
+
+.confusion-item .actual-char-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: white;
+  border-radius: 3px;
+  border: 1px solid #e0e0e0;
+}
+
+.confusion-item .actual-char {
+  color: #f44336;
+  font-size: 16px;
+}
+
+.confusion-item .error-count {
+  color: #666;
+  font-size: 14px;
+}
+
+/* V2 Analytics: Rhythm Chart Styles */
+.rhythm-chart-container {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.rhythm-chart {
+  width: 100%;
+  height: auto;
+  background: white;
+  border-radius: 5px;
+  padding: 10px;
+}
+
+.rhythm-analysis {
+  margin-top: 20px;
+  padding: 15px;
+  background: white;
+  border-radius: 5px;
+  border-left: 4px solid #9c27b0;
+}
+
+.rhythm-analysis h4 {
+  margin-top: 0;
+  color: #333;
+}
+
+.rhythm-analysis ul {
+  margin: 10px 0;
+  padding-left: 25px;
+}
+
+.rhythm-analysis li {
+  margin-bottom: 8px;
+  color: #666;
+  line-height: 1.6;
+}
+
+/* V2 Analytics: Shift Penalty Styles */
+.shift-penalty-card {
+  margin-top: 20px;
+  padding: 25px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.shift-penalty-card h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.penalty-value {
+  font-size: 48px;
+  font-weight: bold;
+  margin: 20px 0;
+}
+
+.penalty-value.good {
+  color: #4CAF50;
+}
+
+.penalty-value.moderate {
+  color: #ff9800;
+}
+
+.penalty-value.high {
+  color: #f44336;
+}
+
+.penalty-details {
+  margin-top: 20px;
+}
+
+.penalty-details p {
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.penalty-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.penalty-stats .stat {
+  padding: 15px;
+  background: white;
+  border-radius: 5px;
+  border-left: 4px solid #673ab7;
+  text-align: left;
+}
+
+.penalty-stats .stat-label {
+  display: block;
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.penalty-stats .stat-value {
+  display: block;
+  color: #673ab7;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.penalty-stats .stat-count {
+  display: block;
+  color: #999;
+  font-size: 12px;
+  margin-top: 5px;
+}
+

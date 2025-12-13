@@ -11,6 +11,12 @@ function Analyzer() {
   const [dwellTimeByFinger, setDwellTimeByFinger] = useState(null);
   const [flightTimeByKey, setFlightTimeByKey] = useState(null);
   const [flightTimeByFinger, setFlightTimeByFinger] = useState(null);
+  
+  // V2 Analytics state
+  const [digraphLatency, setDigraphLatency] = useState(null);
+  const [errorConfusionMatrix, setErrorConfusionMatrix] = useState(null);
+  const [rhythmData, setRhythmData] = useState(null);
+  const [shiftPenalty, setShiftPenalty] = useState(null);
 
   // Pre-process fingerMap for efficient lookups
   const fingerLookup = useMemo(() => {
@@ -66,6 +72,22 @@ function Analyzer() {
     // Calculate flight time per finger
     const flightByFinger = calculateFlightTimeByFinger(flightByKey);
     setFlightTimeByFinger(flightByFinger);
+    
+    // V2 Analytics: Calculate digraph latency
+    const digraphs = calculateDigraphLatency(data.events, data.charStates);
+    setDigraphLatency(digraphs);
+    
+    // V2 Analytics: Calculate error confusion matrix
+    const confusionMatrix = calculateErrorConfusionMatrix(data.charStates);
+    setErrorConfusionMatrix(confusionMatrix);
+    
+    // V2 Analytics: Calculate rhythm data
+    const rhythm = calculateRhythmData(data.events, data.charStates);
+    setRhythmData(rhythm);
+    
+    // V2 Analytics: Calculate shift penalty
+    const penalty = calculateShiftPenalty(data.events);
+    setShiftPenalty(penalty);
   };
 
   const calculateStatistics = (data) => {
@@ -243,6 +265,222 @@ function Analyzer() {
     return averageFingerFlightTimes;
   };
 
+  // V2 Analytics: Calculate digraph latency (flight time between character pairs)
+  const calculateDigraphLatency = (events, charStates) => {
+    const digraphTimes = {};
+    let lastKeyUpTime = null;
+    let lastChar = null;
+
+    events.forEach(event => {
+      if (event.type === 'keydown') {
+        const currentChar = event.expectedChar;
+        const currentIndex = event.currentIndex;
+        
+        // Check if this is a valid character (not backspace or modifier) and in charStates
+        const isValidChar = currentChar && currentChar.length === 1 && 
+                           charStates && 
+                           currentIndex !== undefined && 
+                           currentIndex >= 0 && 
+                           currentIndex < charStates.length &&
+                           charStates[currentIndex];
+        
+        if (lastKeyUpTime !== null && lastChar !== null && isValidChar) {
+          // Skip if previous char was backspace
+          if (lastChar !== 'Backspace' && lastChar.length === 1) {
+            const flightTime = event.timestamp - lastKeyUpTime;
+            const pair = `${lastChar}${currentChar}`;
+            
+            if (!digraphTimes[pair]) {
+              digraphTimes[pair] = {
+                times: [],
+                char1: lastChar,
+                char2: currentChar,
+                fromFinger: getFingerForKey(lastChar),
+                toFinger: getFingerForKey(currentChar)
+              };
+            }
+            digraphTimes[pair].times.push(flightTime);
+          }
+        }
+        
+        // Don't update lastChar for backspace or modifiers
+        if (isValidChar) {
+          lastChar = currentChar;
+        }
+      } else if (event.type === 'keyup') {
+        // Only update lastKeyUpTime for valid characters
+        if (event.key && event.key.length === 1 && event.key !== 'Backspace') {
+          lastKeyUpTime = event.timestamp;
+        }
+      }
+    });
+
+    // Calculate average flight time for each digraph
+    const digraphAverages = Object.entries(digraphTimes).map(([pair, data]) => {
+      const avg = data.times.reduce((sum, t) => sum + t, 0) / data.times.length;
+      const sameFinger = data.fromFinger === data.toFinger && data.fromFinger !== null;
+      
+      return {
+        pair,
+        char1: data.char1,
+        char2: data.char2,
+        avgLatency: avg,
+        count: data.times.length,
+        fromFinger: data.fromFinger,
+        toFinger: data.toFinger,
+        sameFinger,
+        fingerChange: data.fromFinger && data.toFinger 
+          ? `${getFingerName(data.fromFinger)} → ${getFingerName(data.toFinger)}`
+          : 'Unknown'
+      };
+    });
+
+    // Sort by average latency (slowest first)
+    return digraphAverages.sort((a, b) => b.avgLatency - a.avgLatency);
+  };
+
+  // V2 Analytics: Calculate error confusion matrix
+  const calculateErrorConfusionMatrix = (charStates) => {
+    if (!charStates || !Array.isArray(charStates)) {
+      return null;
+    }
+
+    const confusionMap = {};
+
+    charStates.forEach(charState => {
+      // Check if this was an error (incorrect or corrected means there was an error at some point)
+      if (charState.status === 'incorrect') {
+        const expected = charState.char;
+        const actual = charState.userBuffer;
+        
+        if (expected && actual && expected !== actual) {
+          if (!confusionMap[expected]) {
+            confusionMap[expected] = {};
+          }
+          if (!confusionMap[expected][actual]) {
+            confusionMap[expected][actual] = 0;
+          }
+          confusionMap[expected][actual]++;
+        }
+      }
+    });
+
+    // Convert to sorted array for display
+    const confusionData = Object.entries(confusionMap).map(([expected, actualMap]) => {
+      const actualChars = Object.entries(actualMap)
+        .map(([actual, count]) => ({ actual, count }))
+        .sort((a, b) => b.count - a.count);
+      
+      return {
+        expected,
+        actualChars,
+        totalErrors: actualChars.reduce((sum, item) => sum + item.count, 0)
+      };
+    }).sort((a, b) => b.totalErrors - a.totalErrors);
+
+    return confusionData.length > 0 ? confusionData : null;
+  };
+
+  // V2 Analytics: Calculate rhythm data (keydown to keydown intervals)
+  const calculateRhythmData = (events, charStates) => {
+    if (!events || !charStates) {
+      return null;
+    }
+
+    const intervals = [];
+    let lastKeydownTime = null;
+    let sessionStartTime = null;
+
+    events.forEach(event => {
+      if (event.type === 'keydown') {
+        const currentIndex = event.currentIndex;
+        
+        // Validate currentIndex is within bounds
+        if (currentIndex !== undefined && currentIndex >= 0 && currentIndex < charStates.length) {
+          const charState = charStates[currentIndex];
+          
+          // Only include correct keystrokes for rhythm analysis
+          if (charState && charState.status === 'correct' && event.key && event.key.length === 1) {
+            if (sessionStartTime === null) {
+              sessionStartTime = event.timestamp;
+            }
+            
+            if (lastKeydownTime !== null) {
+              const interval = event.timestamp - lastKeydownTime;
+              const sessionTime = event.timestamp - sessionStartTime;
+              
+              intervals.push({
+                sessionTime,
+                interval,
+                char: event.expectedChar
+              });
+            }
+            
+            lastKeydownTime = event.timestamp;
+          }
+        }
+      }
+    });
+
+    return intervals.length > 0 ? intervals : null;
+  };
+
+  // V2 Analytics: Calculate shift penalty (capitalization cost)
+  const calculateShiftPenalty = (events) => {
+    if (!events) {
+      return null;
+    }
+
+    const uppercaseIntervals = [];
+    const lowercaseIntervals = [];
+    let lastKeydownTime = null;
+
+    events.forEach(event => {
+      if (event.type === 'keydown') {
+        // Only analyze alphabetic characters
+        if (event.key && event.key.length === 1 && /[a-zA-Z]/.test(event.key)) {
+          if (lastKeydownTime !== null) {
+            const interval = event.timestamp - lastKeydownTime;
+            
+            // Determine if this is uppercase or lowercase
+            if (event.key === event.key.toUpperCase() && event.key !== event.key.toLowerCase()) {
+              uppercaseIntervals.push(interval);
+            } else if (event.key === event.key.toLowerCase()) {
+              lowercaseIntervals.push(interval);
+            }
+          }
+          
+          lastKeydownTime = event.timestamp;
+        }
+      }
+    });
+
+    // Calculate averages
+    if (uppercaseIntervals.length === 0 && lowercaseIntervals.length === 0) {
+      return null;
+    }
+
+    const avgUppercase = uppercaseIntervals.length > 0
+      ? uppercaseIntervals.reduce((sum, t) => sum + t, 0) / uppercaseIntervals.length
+      : 0;
+    
+    const avgLowercase = lowercaseIntervals.length > 0
+      ? lowercaseIntervals.reduce((sum, t) => sum + t, 0) / lowercaseIntervals.length
+      : 0;
+
+    const penalty = avgUppercase - avgLowercase;
+    const percentSlower = avgLowercase > 0 ? ((penalty / avgLowercase) * 100) : 0;
+
+    return {
+      avgUppercase,
+      avgLowercase,
+      penalty,
+      percentSlower,
+      uppercaseCount: uppercaseIntervals.length,
+      lowercaseCount: lowercaseIntervals.length
+    };
+  };
+
   const getFingerForKey = (key) => {
     // Use pre-processed lookup map for efficient O(1) lookup
     return fingerLookup.get(key.toLowerCase()) || null;
@@ -255,6 +493,10 @@ function Analyzer() {
     setDwellTimeByFinger(null);
     setFlightTimeByKey(null);
     setFlightTimeByFinger(null);
+    setDigraphLatency(null);
+    setErrorConfusionMatrix(null);
+    setRhythmData(null);
+    setShiftPenalty(null);
   };
 
   return (
@@ -427,6 +669,178 @@ function Analyzer() {
               )}
 
               <KeyboardHeatmap data={flightTimeByKey} title="Flight Time Heatmap" />
+            </div>
+          )}
+
+          {/* V2 Analytics: Digraph Latency Analysis */}
+          {digraphLatency && digraphLatency.length > 0 && (
+            <div className="analysis-panel">
+              <h2>Digraph Latency Analysis</h2>
+              <p className="panel-description">
+                Flight time between specific letter pairs (digraphs) - identifying anatomical bottlenecks
+              </p>
+              
+              <h3>Slowest Transitions (Top 10)</h3>
+              <div className="digraph-table">
+                <div className="table-header">
+                  <span>Transition</span>
+                  <span>Finger Change</span>
+                  <span>Avg Latency</span>
+                  <span>Count</span>
+                </div>
+                {digraphLatency.slice(0, 10).map((digraph, idx) => (
+                  <div 
+                    key={idx} 
+                    className={`table-row ${digraph.sameFinger ? 'same-finger' : ''}`}
+                  >
+                    <span className="transition-chars">
+                      {digraph.char1} → {digraph.char2}
+                    </span>
+                    <span className="finger-change">{digraph.fingerChange}</span>
+                    <span className="latency-value">{digraph.avgLatency.toFixed(2)}ms</span>
+                    <span className="count-value">{digraph.count}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="info-note">
+                <span className="same-finger-indicator">Red rows</span> indicate same-finger transitions (mechanical jumps)
+              </p>
+            </div>
+          )}
+
+          {/* V2 Analytics: Error Confusion Matrix */}
+          {errorConfusionMatrix && errorConfusionMatrix.length > 0 && (
+            <div className="analysis-panel">
+              <h2>Error Confusion Matrix</h2>
+              <p className="panel-description">
+                Analysis of typing errors - what you typed instead of the target character
+              </p>
+              
+              <h3>Missed vs. Hit Analysis</h3>
+              <div className="confusion-matrix">
+                {errorConfusionMatrix.slice(0, 10).map((error, idx) => (
+                  <div key={idx} className="confusion-item">
+                    <div className="expected-char">
+                      When you missed <strong>&apos;{error.expected}&apos;</strong>, you typed:
+                    </div>
+                    <div className="actual-chars">
+                      {error.actualChars.map((actual, i) => (
+                        <div key={i} className="actual-char-item">
+                          <span className="actual-char"><strong>&apos;{actual.actual}&apos;</strong></span>
+                          <span className="error-count">({actual.count} {actual.count === 1 ? 'time' : 'times'})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* V2 Analytics: Rhythm & Consistency Visualization */}
+          {rhythmData && rhythmData.length > 0 && (
+            <div className="analysis-panel">
+              <h2>Typing Rhythm (Seismograph)</h2>
+              <p className="panel-description">
+                Your typing speed over time - visualizing flow state, hesitation, and fatigue
+              </p>
+              
+              <div className="rhythm-chart-container">
+                <svg className="rhythm-chart" viewBox="0 0 800 300" preserveAspectRatio="xMidYMid meet">
+                  {/* Grid lines */}
+                  <line x1="50" y1="250" x2="750" y2="250" stroke="#e5e7eb" strokeWidth="1" />
+                  <line x1="50" y1="200" x2="750" y2="200" stroke="#e5e7eb" strokeWidth="0.5" />
+                  <line x1="50" y1="150" x2="750" y2="150" stroke="#e5e7eb" strokeWidth="0.5" />
+                  <line x1="50" y1="100" x2="750" y2="100" stroke="#e5e7eb" strokeWidth="0.5" />
+                  <line x1="50" y1="50" x2="750" y2="50" stroke="#e5e7eb" strokeWidth="0.5" />
+                  
+                  {/* Y-axis */}
+                  <line x1="50" y1="20" x2="50" y2="250" stroke="#374151" strokeWidth="2" />
+                  {/* X-axis */}
+                  <line x1="50" y1="250" x2="750" y2="250" stroke="#374151" strokeWidth="2" />
+                  
+                  {/* Plot the rhythm line */}
+                  {(() => {
+                    const maxTime = rhythmData[rhythmData.length - 1].sessionTime;
+                    const maxInterval = Math.max(...rhythmData.map(d => d.interval));
+                    const minInterval = Math.min(...rhythmData.map(d => d.interval));
+                    const intervalRange = maxInterval - minInterval || 1;
+                    
+                    const points = rhythmData.map((d) => {
+                      const x = 50 + ((d.sessionTime / maxTime) * 700);
+                      const y = 250 - (((d.interval - minInterval) / intervalRange) * 200);
+                      return `${x},${y}`;
+                    }).join(' ');
+                    
+                    return (
+                      <>
+                        <polyline
+                          points={points}
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="2"
+                        />
+                        {/* Labels */}
+                        <text x="10" y="30" fontSize="12" fill="#6b7280">Fast</text>
+                        <text x="10" y="255" fontSize="12" fill="#6b7280">Slow</text>
+                        <text x="350" y="280" fontSize="14" fill="#374151" textAnchor="middle">
+                          Session Progress
+                        </text>
+                        <text x="25" y="150" fontSize="14" fill="#374151" transform="rotate(-90 25 150)">
+                          Interval (ms)
+                        </text>
+                      </>
+                    );
+                  })()}
+                </svg>
+                
+                <div className="rhythm-analysis">
+                  <h4>Analysis Zones:</h4>
+                  <ul>
+                    <li><strong>Tight Cluster:</strong> Indicates &quot;Flow State&quot; - consistent, rhythmic typing</li>
+                    <li><strong>Spikes:</strong> Indicate &quot;Hesitation/Panic&quot; - uncertainty or difficult sequences</li>
+                    <li><strong>Upward Trend:</strong> Indicates &quot;Fatigue&quot; - slowing down over time</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* V2 Analytics: Capitalization Cost */}
+          {shiftPenalty && (shiftPenalty.uppercaseCount > 0 || shiftPenalty.lowercaseCount > 0) && (
+            <div className="analysis-panel">
+              <h2>Shift Key Analysis</h2>
+              <p className="panel-description">
+                Biomechanical cost of using the pinky finger for the Shift key
+              </p>
+              
+              <div className="shift-penalty-card">
+                <h3>Shift Key Penalty</h3>
+                <div className={`penalty-value ${
+                  shiftPenalty.penalty < 20 ? 'good' : 
+                  shiftPenalty.penalty < 50 ? 'moderate' : 'high'
+                }`}>
+                  +{shiftPenalty.penalty.toFixed(2)}ms
+                </div>
+                <div className="penalty-details">
+                  <p>
+                    Your capital letters take <strong>{Math.abs(shiftPenalty.percentSlower).toFixed(1)}%</strong> 
+                    {shiftPenalty.penalty >= 0 ? ' longer' : ' less time'} to type than lowercase letters.
+                  </p>
+                  <div className="penalty-stats">
+                    <div className="stat">
+                      <span className="stat-label">Uppercase avg:</span>
+                      <span className="stat-value">{shiftPenalty.avgUppercase.toFixed(2)}ms</span>
+                      <span className="stat-count">({shiftPenalty.uppercaseCount} chars)</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-label">Lowercase avg:</span>
+                      <span className="stat-value">{shiftPenalty.avgLowercase.toFixed(2)}ms</span>
+                      <span className="stat-count">({shiftPenalty.lowercaseCount} chars)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

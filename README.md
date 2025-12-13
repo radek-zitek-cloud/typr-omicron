@@ -17,6 +17,13 @@ This project provides a web-based typing test application that records detailed 
 - **Performance Metrics**: Real-time accuracy and character count display
 - **Accurate Duration Tracking**: Session duration excludes trailing time after the last keystroke
 
+### V2 Analytics Features
+
+- **Digraph Latency Analysis**: Identifies the slowest character-pair transitions (digraphs) to reveal anatomical bottlenecks between fingers
+- **Error Confusion Matrix**: Diagnoses typing errors by showing what you typed instead of the target character
+- **Typing Rhythm Visualization**: Seismograph-style chart showing your typing consistency, flow state, hesitation, and fatigue patterns
+- **Shift Key Penalty**: Measures the biomechanical cost of using capital letters compared to lowercase
+
 ## Getting Started
 
 ### Prerequisites
