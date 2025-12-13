@@ -9,6 +9,8 @@ Backend API server for the Typr Omicron typing test application. Provides REST A
 - **Session History**: Save and retrieve typing test session data
 - **SQLite Database**: Lightweight, file-based database for data persistence
 - **RESTful API**: Clean API design with JSON responses
+- **Rate Limiting**: Protection against abuse with IP-based rate limiting
+- **CORS Support**: Configured for cross-origin requests from frontend
 
 ## Prerequisites
 
@@ -105,8 +107,21 @@ The server will start on `http://localhost:3001` by default.
 - **Runtime**: Node.js (ES Modules)
 - **Framework**: Express.js 5.x
 - **Database**: SQLite (better-sqlite3)
+- **Security**: Rate limiting (express-rate-limit)
 - **CORS**: CORS middleware
 - **Environment**: dotenv
+
+## Rate Limiting
+
+The API includes rate limiting to protect against abuse:
+
+- **General API routes**: 100 requests per 15 minutes per IP
+- **Write operations** (POST, PUT, DELETE): 50 requests per 15 minutes per IP
+
+Rate limit headers are included in responses:
+- `RateLimit-Limit`: Maximum requests allowed
+- `RateLimit-Remaining`: Requests remaining in current window
+- `RateLimit-Reset`: Seconds until the rate limit resets
 
 ## Development
 
