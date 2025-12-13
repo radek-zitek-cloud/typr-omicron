@@ -1,15 +1,34 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useAppContext } from './AppContext';
+import ConfigBar from './ConfigBar';
 import './TypingTest.css';
 import wordsData from './words.json';
 
 // Configuration constants
 const SCROLL_SPEED_MULTIPLIER = 0.6; // Controls how fast the text scrolls
 
+// Helper function to get word source
+function getWordSource() {
+  const customWords = localStorage.getItem('typr_custom_words');
+  if (customWords) {
+    try {
+      const parsed = JSON.parse(customWords);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch (e) {
+      console.error('Error parsing custom words', e);
+    }
+  }
+  return wordsData;
+}
+
 // Helper function to generate random text and initialize char states
-function initializeTextAndStates(wordsData) {
+function initializeTextAndStates(wordsData, wordCount = 50) {
   const words = [];
-  for (let i = 0; i < 50; i++) {
-    const randomWord = wordsData[Math.floor(Math.random() * wordsData.length)];
+  const source = getWordSource();
+  for (let i = 0; i < wordCount; i++) {
+    const randomWord = source[Math.floor(Math.random() * source.length)];
     words.push(randomWord);
   }
   const textStr = words.join(' ');
@@ -22,8 +41,11 @@ function initializeTextAndStates(wordsData) {
 }
 
 function TypingTest() {
-  // Generate initial data once using useMemo (memoized, won't regenerate)
-  const initialData = useMemo(() => initializeTextAndStates(wordsData), []);
+  const { testConfig, saveSession, currentUser } = useAppContext();
+  
+  // Generate initial data based on test config
+  const initialWordCount = testConfig.mode === 'words' ? testConfig.wordCount : 200; // More words for time mode
+  const initialData = useMemo(() => initializeTextAndStates(wordsData, initialWordCount), [initialWordCount]);
   
   const [text, setText] = useState(initialData.text);
   const [charStates, setCharStates] = useState(initialData.charStates);
@@ -31,6 +53,7 @@ function TypingTest() {
   const [events, setEvents] = useState([]);
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(null); // For time mode
   const sessionStartTimeRef = useRef(null);
   const lastKeystrokeTimeRef = useRef(null);
   const textDisplayRef = useRef(null);
@@ -77,6 +100,44 @@ function TypingTest() {
       }
     }
   }, [text]); // Recalculate when text changes
+
+  // Timer logic for time mode
+  useEffect(() => {
+    if (testConfig.mode === 'time' && sessionActive && timeRemaining !== null) {
+      if (timeRemaining <= 0) {
+        endSession();
+        return;
+      }
+      
+      const timer = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      return () => clearInterval(timer);
+    }
+  }, [testConfig.mode, sessionActive, timeRemaining, endSession]);
+
+  // Check word count completion for word mode
+  useEffect(() => {
+    if (testConfig.mode === 'words' && sessionActive) {
+      const targetChars = calculateTargetChars(testConfig.wordCount);
+      if (maxIndexReached >= targetChars) {
+        endSession();
+      }
+    }
+  }, [testConfig.mode, testConfig.wordCount, sessionActive, maxIndexReached, endSession]);
+  
+  // Helper to calculate target character count from word count
+  const calculateTargetChars = (wordCount) => {
+    // Approximate: average word length + 1 space
+    return wordCount * 6; // Rough estimate
+  };
 
   // Calculate accuracy - productive accuracy only (first-time attempts)
   const calculateAccuracy = (maxReached, errors) => {
@@ -142,8 +203,15 @@ function TypingTest() {
   const endSession = useCallback(() => {
     setSessionActive(false);
     const sessionData = buildSessionData();
+    
+    // Save to context/localStorage
+    if (saveSession) {
+      saveSession(sessionData);
+    }
+    
+    // Also download as JSON file
     downloadSessionFile(sessionData);
-  }, [buildSessionData, downloadSessionFile]);
+  }, [buildSessionData, downloadSessionFile, saveSession]);
 
   // Download session data without modifying state (for already-ended sessions)
   const downloadSessionData = useCallback(() => {
@@ -153,8 +221,8 @@ function TypingTest() {
 
   // Handle key down event
   const handleKeyDown = useCallback((e) => {
-    // Prevent actions if we've completed the text
-    if (currentIndex >= text.length) return;
+    // Prevent actions if we've completed the text (except in time mode where we generate more)
+    if (testConfig.mode === 'words' && currentIndex >= text.length) return;
     
     // Prevent actions if session ended (but allow starting new session)
     if (sessionStarted && !sessionActive) return;
@@ -164,10 +232,22 @@ function TypingTest() {
       setSessionStarted(true);
       setSessionActive(true);
       sessionStartTimeRef.current = Date.now();
+      
+      // Initialize timer for time mode
+      if (testConfig.mode === 'time') {
+        setTimeRemaining(testConfig.timeLimit);
+      }
     }
 
     // Update last keystroke time for every keystroke
     lastKeystrokeTimeRef.current = Date.now();
+    
+    // Generate more text dynamically for time mode if getting close to end
+    if (testConfig.mode === 'time' && currentIndex > text.length - 50) {
+      const newData = initializeTextAndStates(wordsData, 50);
+      setText(prev => prev + ' ' + newData.text);
+      setCharStates(prev => [...prev, ...newData.charStates]);
+    }
 
     const eventData = {
       type: 'keydown',
@@ -263,7 +343,7 @@ function TypingTest() {
         // The session remains active for the user to end it when ready
       }
     }
-  }, [sessionStarted, sessionActive, currentIndex, text]);
+  }, [sessionStarted, sessionActive, currentIndex, text, testConfig]);
 
   // Handle key up event
   const handleKeyUp = useCallback((e) => {
@@ -320,18 +400,33 @@ function TypingTest() {
 
   // Reset function
   const reset = () => {
-    // Reset to initial state (same text for retry)
-    setText(initialData.text);
-    setCharStates(initialData.charStates);
+    // Generate new text for the configured mode
+    const newWordCount = testConfig.mode === 'words' ? testConfig.wordCount : 200;
+    const newData = initializeTextAndStates(wordsData, newWordCount);
+    
+    // Reset to new text
+    setText(newData.text);
+    setCharStates(newData.charStates);
     setCurrentIndex(0);
     setEvents([]);
     setSessionActive(false);
     setSessionStarted(false);
+    setTimeRemaining(null);
     setTotalKeystrokes(0);
     setMaxIndexReached(0);
     setFirstTimeErrors(new Set());
     sessionStartTimeRef.current = null;
     lastKeystrokeTimeRef.current = null;
+  };
+
+  // Apply font settings from user profile
+  const getFontFamily = () => {
+    return currentUser?.settings.font || 'Courier New';
+  };
+  
+  const getFontSize = () => {
+    const size = currentUser?.settings.fontSize || 'M';
+    return size === 'S' ? '1.5rem' : size === 'L' ? '2.5rem' : '2rem';
   };
 
   return (
@@ -341,6 +436,9 @@ function TypingTest() {
         <div className="stats">
           {sessionStarted && (
             <>
+              {testConfig.mode === 'time' && timeRemaining !== null && (
+                <span className="timer">Time: {timeRemaining}s</span>
+              )}
               <span>Index: {currentIndex}</span>
               <span>Max Reached: {maxIndexReached}</span>
               <span>Accuracy: {calculateAccuracy(maxIndexReached, firstTimeErrors)}%</span>
@@ -352,13 +450,17 @@ function TypingTest() {
         </div>
       </div>
 
+      <ConfigBar />
+
       <div className="text-container">
         <div 
           ref={textDisplayRef}
           className="text-display" 
           style={{
             transform: `translateX(${-currentIndex * charWidth}em)`,
-            marginLeft: '50%'
+            marginLeft: '50%',
+            fontFamily: getFontFamily(),
+            fontSize: getFontSize()
           }}
         >
           {charStates.map((charState, index) => renderCharacter(charState, index))}

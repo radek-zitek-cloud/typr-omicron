@@ -1,10 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useAppContext } from './AppContext';
 import './Analyzer.css';
 import fingerMap from './fingermap.json';
 import KeyboardHeatmap from './KeyboardHeatmap';
 import HandHeatmap from './HandHeatmap';
 
 function Analyzer() {
+  const [searchParams] = useSearchParams();
+  const { getSession } = useAppContext();
+  
   const [sessionData, setSessionData] = useState(null);
   const [statistics, setStatistics] = useState(null);
   const [dwellTimeByKey, setDwellTimeByKey] = useState(null);
@@ -28,6 +33,18 @@ function Analyzer() {
     });
     return lookup;
   }, []);
+
+  // Load session from query parameter
+  useEffect(() => {
+    const sessionId = searchParams.get('session');
+    if (sessionId && getSession) {
+      const session = getSession(sessionId);
+      if (session) {
+        setSessionData(session);
+        analyzeData(session);
+      }
+    }
+  }, [searchParams, getSession]);
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];

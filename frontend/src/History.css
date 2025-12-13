@@ -1,0 +1,132 @@
+.history {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.history .header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.history .header h1 {
+  margin: 0;
+  font-size: 2.5rem;
+  color: #646cff;
+}
+
+.sparkline-container {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+}
+
+.sparkline-container h3 {
+  margin: 0 0 1rem 0;
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+.sparkline {
+  width: 100%;
+  height: 100px;
+  border-radius: 8px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #888;
+  font-size: 1.1rem;
+}
+
+.session-table {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.table-header {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr 1.5fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: rgba(100, 108, 255, 0.15);
+  font-weight: 600;
+  color: #fff;
+  border-bottom: 2px solid rgba(100, 108, 255, 0.3);
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr 1.5fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #ccc;
+  transition: background 0.2s;
+}
+
+.table-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+.wpm-value {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.accuracy-value {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.view-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: none;
+  background: #646cff;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.view-btn:hover {
+  background: #535bf2;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .table-header,
+  .table-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  
+  .table-header {
+    display: none;
+  }
+  
+  .table-row {
+    padding: 1rem;
+  }
+  
+  .table-row span {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .table-row span::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #888;
+  }
+}
