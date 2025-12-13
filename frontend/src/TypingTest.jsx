@@ -87,14 +87,8 @@ function TypingTest() {
     return ((correct / productiveChars) * 100).toFixed(2);
   };
 
-  // End session and export data
-  const endSession = useCallback(() => {
-    setSessionActive(false);
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current);
-      inactivityTimerRef.current = null;
-    }
-    
+  // Helper function to build session data for export
+  const buildSessionData = useCallback(() => {
     // Calculate session duration
     const duration = sessionStartTimeRef.current 
       ? Date.now() - sessionStartTimeRef.current 
@@ -115,8 +109,7 @@ function TypingTest() {
       .map(cs => cs.userBuffer !== null ? cs.userBuffer : '')
       .join('');
     
-    // Export data automatically when session ends using refs for latest values
-    const sessionData = {
+    return {
       text: textRef.current,
       userInput: userInputStr,
       charStates: charStatesRef.current,
@@ -130,6 +123,17 @@ function TypingTest() {
       firstTimeErrors: Array.from(firstTimeErrorsRef.current),
       timestamp: new Date().toISOString()
     };
+  }, []);
+
+  // End session and export data
+  const endSession = useCallback(() => {
+    setSessionActive(false);
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+    }
+    
+    const sessionData = buildSessionData();
 
     const dataStr = JSON.stringify(sessionData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
@@ -139,7 +143,7 @@ function TypingTest() {
     link.download = `typing-session-${Date.now()}.json`;
     link.click();
     URL.revokeObjectURL(url);
-  }, []);
+  }, [buildSessionData]);
 
   // Reset inactivity timer
   const resetInactivityTimer = useCallback(() => {
@@ -154,40 +158,7 @@ function TypingTest() {
 
   // Export session data as JSON (for manual export button)
   const exportData = useCallback(() => {
-    // Calculate session duration
-    const duration = sessionStartTimeRef.current 
-      ? Date.now() - sessionStartTimeRef.current 
-      : 0;
-    const durationInMinutes = duration / 60000;
-    
-    // Calculate metrics
-    const mechanicalCPM = durationInMinutes > 0 
-      ? (totalKeystrokesRef.current / durationInMinutes).toFixed(2)
-      : 0;
-    const productiveCPM = durationInMinutes > 0 
-      ? (maxIndexReachedRef.current / durationInMinutes).toFixed(2)
-      : 0;
-    const accuracy = calculateAccuracy(maxIndexReachedRef.current, firstTimeErrorsRef.current);
-    
-    // Build user input string from charStates
-    const userInputStr = charStatesRef.current
-      .map(cs => cs.userBuffer !== null ? cs.userBuffer : '')
-      .join('');
-    
-    const sessionData = {
-      text: textRef.current,
-      userInput: userInputStr,
-      charStates: charStatesRef.current,
-      events: eventsRef.current,
-      sessionDuration: duration,
-      mechanicalCPM: parseFloat(mechanicalCPM),
-      productiveCPM: parseFloat(productiveCPM),
-      accuracy: parseFloat(accuracy),
-      totalKeystrokes: totalKeystrokesRef.current,
-      maxIndexReached: maxIndexReachedRef.current,
-      firstTimeErrors: Array.from(firstTimeErrorsRef.current),
-      timestamp: new Date().toISOString()
-    };
+    const sessionData = buildSessionData();
 
     const dataStr = JSON.stringify(sessionData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
@@ -197,7 +168,7 @@ function TypingTest() {
     link.download = `typing-session-${Date.now()}.json`;
     link.click();
     URL.revokeObjectURL(url);
-  }, []);
+  }, [buildSessionData]);
 
   // Handle key down event
   const handleKeyDown = useCallback((e) => {
@@ -226,10 +197,7 @@ function TypingTest() {
       e.preventDefault();
       if (currentIndex > 0) {
         setCurrentIndex(prev => prev - 1);
-        // Note: We don't count backspace as a keystroke for mechanical CPM per requirements
-        // (it says "including Backspaces" but context suggests we count the correction character, not the backspace itself)
-        // Actually, re-reading: "Total Keypresses (including Backspaces + Correction characters)"
-        // This means we DO count backspace
+        // Count backspace in mechanical CPM (total keypresses)
         setTotalKeystrokes(prev => prev + 1);
       }
     } 
