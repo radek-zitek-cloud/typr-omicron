@@ -25,7 +25,7 @@ function getAudioContext() {
  */
 export function playCorrectSound() {
   const ctx = getAudioContext();
-  if (!ctx) return;
+  if (!ctx || ctx.state !== 'running') return;
   
   const oscillator = ctx.createOscillator();
   const gainNode = ctx.createGain();
@@ -50,7 +50,7 @@ export function playCorrectSound() {
  */
 export function playErrorSound() {
   const ctx = getAudioContext();
-  if (!ctx) return;
+  if (!ctx || ctx.state !== 'running') return;
   
   const oscillator = ctx.createOscillator();
   const gainNode = ctx.createGain();
