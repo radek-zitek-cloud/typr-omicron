@@ -278,7 +278,11 @@ function Analyzer() {
         
         // Check if this is a valid character (not backspace or modifier) and in charStates
         const isValidChar = currentChar && currentChar.length === 1 && 
-                           charStates && charStates[currentIndex];
+                           charStates && 
+                           currentIndex !== undefined && 
+                           currentIndex >= 0 && 
+                           currentIndex < charStates.length &&
+                           charStates[currentIndex];
         
         if (lastKeyUpTime !== null && lastChar !== null && isValidChar) {
           // Skip if previous char was backspace
@@ -390,26 +394,30 @@ function Analyzer() {
     events.forEach(event => {
       if (event.type === 'keydown') {
         const currentIndex = event.currentIndex;
-        const charState = charStates[currentIndex];
         
-        // Only include correct keystrokes for rhythm analysis
-        if (charState && charState.status === 'correct' && event.key.length === 1) {
-          if (sessionStartTime === null) {
-            sessionStartTime = event.timestamp;
-          }
+        // Validate currentIndex is within bounds
+        if (currentIndex !== undefined && currentIndex >= 0 && currentIndex < charStates.length) {
+          const charState = charStates[currentIndex];
           
-          if (lastKeydownTime !== null) {
-            const interval = event.timestamp - lastKeydownTime;
-            const sessionTime = event.timestamp - sessionStartTime;
+          // Only include correct keystrokes for rhythm analysis
+          if (charState && charState.status === 'correct' && event.key && event.key.length === 1) {
+            if (sessionStartTime === null) {
+              sessionStartTime = event.timestamp;
+            }
             
-            intervals.push({
-              sessionTime,
-              interval,
-              char: event.expectedChar
-            });
+            if (lastKeydownTime !== null) {
+              const interval = event.timestamp - lastKeydownTime;
+              const sessionTime = event.timestamp - sessionStartTime;
+              
+              intervals.push({
+                sessionTime,
+                interval,
+                char: event.expectedChar
+              });
+            }
+            
+            lastKeydownTime = event.timestamp;
           }
-          
-          lastKeydownTime = event.timestamp;
         }
       }
     });
