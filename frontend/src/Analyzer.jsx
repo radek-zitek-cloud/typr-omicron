@@ -22,6 +22,7 @@ function Analyzer() {
   const [errorConfusionMatrix, setErrorConfusionMatrix] = useState(null);
   const [rhythmData, setRhythmData] = useState(null);
   const [shiftPenalty, setShiftPenalty] = useState(null);
+  const [wpmOverTime, setWpmOverTime] = useState(null);
 
   // Pre-process fingerMap for efficient lookups
   const fingerLookup = useMemo(() => {
@@ -40,6 +41,7 @@ function Analyzer() {
   }, [fingerLookup]);
 
   const calculateStatistics = useCallback((data) => {
+    const CHARS_PER_WORD = 5; // Standard assumption for WPM calculation
     const { sessionDuration, text, userInput, productiveKeystrokes, errorPositions, 
             mechanicalCPM, productiveCPM, totalKeystrokes, maxIndexReached, firstTimeErrors } = data;
     
@@ -49,10 +51,16 @@ function Analyzer() {
       // New format - use the pre-calculated values
       const accuracy = data.accuracy || 100;
       
+      // Calculate WPM from CPM (standard: 5 characters per word)
+      const netWPM = (productiveCPM / CHARS_PER_WORD).toFixed(2);
+      const rawWPM = (mechanicalCPM / CHARS_PER_WORD).toFixed(2);
+      
       return {
         sessionDuration,
         mechanicalCPM: mechanicalCPM.toFixed(2),
         productiveCPM: productiveCPM.toFixed(2),
+        netWPM,
+        rawWPM,
         accuracy: accuracy.toFixed(2),
         totalKeystrokes: totalKeystrokes || 0,
         maxIndexReached: maxIndexReached || 0,
@@ -74,8 +82,6 @@ function Analyzer() {
     const cpm = minutes > 0 ? (effectiveKeystrokes / minutes).toFixed(2) : 0;
     
     // Calculate WPM (words per minute, based on productive keystrokes)
-    // Using standard assumption of 5 characters per word for consistent WPM calculation
-    const CHARS_PER_WORD = 5;
     const wpm = minutes > 0 ? (effectiveKeystrokes / CHARS_PER_WORD / minutes).toFixed(2) : 0;
     
     // Calculate accuracy using error positions if available
@@ -430,6 +436,96 @@ function Analyzer() {
     };
   }, []);
 
+  // Calculate WPM over time with error and backspace markers
+  const calculateWpmOverTime = useCallback((events, charStates) => {
+    const CHARS_PER_WORD = 5; // Standard assumption for WPM calculation
+    
+    if (!events || !charStates) {
+      return null;
+    }
+
+    const BUCKET_SIZE_MS = 1000; // 1-second buckets
+    const SMOOTHING_WINDOW = 2; // 2-second moving average
+    
+    // Find session start time
+    const sessionStartTime = events.find(e => e.type === 'keydown')?.timestamp;
+    if (!sessionStartTime) return null;
+
+    // Find session end time
+    const lastKeystrokeEvent = events.filter(e => e.type === 'keydown').pop();
+    if (!lastKeystrokeEvent) return null;
+    const sessionDuration = lastKeystrokeEvent.timestamp - sessionStartTime;
+
+    // Create buckets
+    const numBuckets = Math.ceil(sessionDuration / BUCKET_SIZE_MS) + 1;
+    const buckets = Array.from({ length: numBuckets }, () => ({
+      charsTyped: 0,
+      errors: [],
+      backspaces: []
+    }));
+
+    // Collect errors and backspaces with their timestamps
+    const errorMarkers = [];
+    const backspaceMarkers = [];
+
+    // Process events
+    events.forEach(event => {
+      if (event.type === 'keydown') {
+        const bucketIndex = Math.floor((event.timestamp - sessionStartTime) / BUCKET_SIZE_MS);
+        
+        if (bucketIndex >= 0 && bucketIndex < buckets.length) {
+          // Check if this is a backspace
+          if (event.key === 'Backspace') {
+            backspaceMarkers.push({
+              timestamp: event.timestamp,
+              relativeTime: (event.timestamp - sessionStartTime) / 1000
+            });
+            buckets[bucketIndex].backspaces.push(event.timestamp);
+          } else if (event.key && event.key.length === 1) {
+            // Count character typed
+            buckets[bucketIndex].charsTyped++;
+            
+            // Check if this was an error by comparing with expected character
+            const expectedChar = event.expectedChar;
+            
+            // This is an error if the key doesn't match the expected character
+            if (expectedChar && event.key !== expectedChar) {
+              errorMarkers.push({
+                timestamp: event.timestamp,
+                relativeTime: (event.timestamp - sessionStartTime) / 1000,
+                expected: expectedChar,
+                actual: event.key
+              });
+              buckets[bucketIndex].errors.push(event.timestamp);
+            }
+          }
+        }
+      }
+    });
+
+    // Calculate instant WPM for each bucket
+    const instantWpm = buckets.map((bucket, idx) => {
+      const timeInSeconds = idx; // bucket index represents seconds
+      const wpm = (bucket.charsTyped / CHARS_PER_WORD) * 60; // Convert chars to WPM
+      return { time: timeInSeconds, wpm };
+    });
+
+    // Apply smoothing (simple moving average)
+    const smoothedWpm = instantWpm.map((point, idx) => {
+      const startIdx = Math.max(0, idx - SMOOTHING_WINDOW);
+      const endIdx = Math.min(instantWpm.length, idx + SMOOTHING_WINDOW + 1);
+      const window = instantWpm.slice(startIdx, endIdx);
+      const avgWpm = window.reduce((sum, p) => sum + p.wpm, 0) / window.length;
+      return { time: point.time, wpm: avgWpm };
+    });
+
+    return {
+      wpmData: smoothedWpm,
+      errorMarkers,
+      backspaceMarkers
+    };
+  }, []);
+
   const analyzeData = useCallback((data) => {
     // Validate data has required fields
     if (!data || !data.events || !Array.isArray(data.events)) {
@@ -472,9 +568,13 @@ function Analyzer() {
     // V2 Analytics: Calculate shift penalty
     const penalty = calculateShiftPenalty(data.events);
     setShiftPenalty(penalty);
+    
+    // Calculate WPM over time
+    const wpmChart = calculateWpmOverTime(data.events, data.charStates);
+    setWpmOverTime(wpmChart);
   }, [calculateStatistics, calculateDwellTimeByKey, calculateDwellTimeByFinger, 
       calculateFlightTimeByKey, calculateFlightTimeByFinger, calculateDigraphLatency,
-      calculateErrorConfusionMatrix, calculateRhythmData, calculateShiftPenalty]);
+      calculateErrorConfusionMatrix, calculateRhythmData, calculateShiftPenalty, calculateWpmOverTime]);
 
   // Load session from query parameter
   useEffect(() => {
@@ -517,6 +617,7 @@ function Analyzer() {
     setErrorConfusionMatrix(null);
     setRhythmData(null);
     setShiftPenalty(null);
+    setWpmOverTime(null);
   };
 
   return (
@@ -546,17 +647,35 @@ function Analyzer() {
           {statistics && (
             <div className="stats-panel">
               <h2>Basic Statistics</h2>
+              <div className="wpm-headline">
+                <div className="wpm-primary">
+                  <span className="wpm-value">{statistics.netWPM}</span>
+                  <span className="wpm-label">WPM</span>
+                </div>
+                <div className="wpm-secondary">
+                  <span className="wpm-raw-value">{statistics.rawWPM} WPM</span>
+                  <span className="wpm-raw-label">(Raw)</span>
+                </div>
+              </div>
               <div className="stats-grid">
                 {/* New format shows mechanical and productive CPM separately */}
                 {statistics.mechanicalCPM !== undefined ? (
                   <>
                     <div className="stat-item">
-                      <span className="stat-label">Mechanical CPM (all keystrokes):</span>
-                      <span className="stat-value">{statistics.mechanicalCPM}</span>
+                      <span className="stat-label">Net WPM (productive):</span>
+                      <span className="stat-value">{statistics.netWPM}</span>
                     </div>
                     <div className="stat-item">
-                      <span className="stat-label">Productive CPM (unique progress):</span>
+                      <span className="stat-label">Raw WPM (all keystrokes):</span>
+                      <span className="stat-value">{statistics.rawWPM}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Productive CPM:</span>
                       <span className="stat-value">{statistics.productiveCPM}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Mechanical CPM:</span>
+                      <span className="stat-value">{statistics.mechanicalCPM}</span>
                     </div>
                     <div className="stat-item">
                       <span className="stat-label">Accuracy:</span>
@@ -583,12 +702,12 @@ function Analyzer() {
                   /* Old format */
                   <>
                     <div className="stat-item">
-                      <span className="stat-label">Characters Per Minute (productive):</span>
-                      <span className="stat-value">{statistics.cpm}</span>
-                    </div>
-                    <div className="stat-item">
                       <span className="stat-label">Words Per Minute (productive):</span>
                       <span className="stat-value">{statistics.wpm}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Characters Per Minute (productive):</span>
+                      <span className="stat-value">{statistics.cpm}</span>
                     </div>
                     <div className="stat-item">
                       <span className="stat-label">Accuracy:</span>
@@ -609,6 +728,176 @@ function Analyzer() {
                   </>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* WPM over Time Chart */}
+          {wpmOverTime && wpmOverTime.wpmData && wpmOverTime.wpmData.length > 0 && (
+            <div className="analysis-panel">
+              <h2>Speed Over Time</h2>
+              <p className="panel-description">
+                Your typing speed throughout the session - higher is faster
+              </p>
+              
+              <div className="wpm-chart-container">
+                <svg className="wpm-chart" viewBox="0 0 800 350" preserveAspectRatio="xMidYMid meet">
+                  {/* Grid lines */}
+                  <line x1="60" y1="280" x2="760" y2="280" stroke="#e5e7eb" strokeWidth="2" />
+                  <line x1="60" y1="230" x2="760" y2="230" stroke="#e5e7eb" strokeWidth="0.5" />
+                  <line x1="60" y1="180" x2="760" y2="180" stroke="#e5e7eb" strokeWidth="0.5" />
+                  <line x1="60" y1="130" x2="760" y2="130" stroke="#e5e7eb" strokeWidth="0.5" />
+                  <line x1="60" y1="80" x2="760" y2="80" stroke="#e5e7eb" strokeWidth="0.5" />
+                  <line x1="60" y1="30" x2="760" y2="30" stroke="#e5e7eb" strokeWidth="0.5" />
+                  
+                  {/* Y-axis */}
+                  <line x1="60" y1="20" x2="60" y2="280" stroke="#374151" strokeWidth="2" />
+                  {/* X-axis */}
+                  <line x1="60" y1="280" x2="760" y2="280" stroke="#374151" strokeWidth="2" />
+                  
+                  {/* Plot the WPM line */}
+                  {(() => {
+                    // Optimize: Calculate maxTime and maxWpm in a single pass
+                    const { maxTime, maxWpm } = wpmOverTime.wpmData.reduce(
+                      (acc, d) => ({
+                        maxTime: Math.max(acc.maxTime, d.time),
+                        maxWpm: Math.max(acc.maxWpm, d.wpm)
+                      }),
+                      { maxTime: 0, maxWpm: 1 }
+                    );
+                    
+                    const points = wpmOverTime.wpmData.map((d) => {
+                      const x = 60 + ((d.time / maxTime) * 700);
+                      const y = 280 - ((d.wpm / maxWpm) * 250);
+                      return `${x},${y}`;
+                    }).join(' ');
+                    
+                    return (
+                      <>
+                        <polyline
+                          points={points}
+                          fill="none"
+                          stroke="#4CAF50"
+                          strokeWidth="3"
+                        />
+                        
+                        {/* Error markers (red X) */}
+                        {wpmOverTime.errorMarkers.map((marker, idx) => {
+                          const bucketIdx = Math.floor(marker.relativeTime);
+                          // Bounds check to prevent array access errors
+                          if (bucketIdx < 0 || bucketIdx >= wpmOverTime.wpmData.length) return null;
+                          
+                          const wpmPoint = wpmOverTime.wpmData[bucketIdx];
+                          if (!wpmPoint) return null;
+                          
+                          const x = 60 + ((wpmPoint.time / maxTime) * 700);
+                          const y = 280 - ((wpmPoint.wpm / maxWpm) * 250);
+                          
+                          return (
+                            <g key={`error-${idx}`}>
+                              <line x1={x-4} y1={y-4} x2={x+4} y2={y+4} stroke="#f44336" strokeWidth="2" />
+                              <line x1={x-4} y1={y+4} x2={x+4} y2={y-4} stroke="#f44336" strokeWidth="2" />
+                            </g>
+                          );
+                        })}
+                        
+                        {/* Backspace markers (yellow/orange ◄) */}
+                        {wpmOverTime.backspaceMarkers.map((marker, idx) => {
+                          const bucketIdx = Math.floor(marker.relativeTime);
+                          // Bounds check to prevent array access errors
+                          if (bucketIdx < 0 || bucketIdx >= wpmOverTime.wpmData.length) return null;
+                          
+                          const wpmPoint = wpmOverTime.wpmData[bucketIdx];
+                          if (!wpmPoint) return null;
+                          
+                          const x = 60 + ((wpmPoint.time / maxTime) * 700);
+                          const y = 280 - ((wpmPoint.wpm / maxWpm) * 250);
+                          
+                          return (
+                            <text 
+                              key={`backspace-${idx}`}
+                              x={x} 
+                              y={y+4} 
+                              fontSize="14" 
+                              fill="#fb8c00" 
+                              textAnchor="middle"
+                              fontWeight="bold"
+                            >
+                              ◄
+                            </text>
+                          );
+                        })}
+                        
+                        {/* Y-axis labels */}
+                        <text x="35" y="285" fontSize="12" fill="#6b7280" textAnchor="end">0</text>
+                        <text x="35" y="235" fontSize="12" fill="#6b7280" textAnchor="end">{(maxWpm * 0.2).toFixed(0)}</text>
+                        <text x="35" y="185" fontSize="12" fill="#6b7280" textAnchor="end">{(maxWpm * 0.4).toFixed(0)}</text>
+                        <text x="35" y="135" fontSize="12" fill="#6b7280" textAnchor="end">{(maxWpm * 0.6).toFixed(0)}</text>
+                        <text x="35" y="85" fontSize="12" fill="#6b7280" textAnchor="end">{(maxWpm * 0.8).toFixed(0)}</text>
+                        <text x="35" y="35" fontSize="12" fill="#6b7280" textAnchor="end">{maxWpm.toFixed(0)}</text>
+                        
+                        {/* Axis labels */}
+                        <text x="410" y="310" fontSize="14" fill="#374151" textAnchor="middle">
+                          Time (seconds)
+                        </text>
+                        <text x="30" y="150" fontSize="14" fill="#374151" transform="rotate(-90 30 150)" textAnchor="middle">
+                          WPM
+                        </text>
+                      </>
+                    );
+                  })()}
+                </svg>
+                
+                <div className="wpm-legend">
+                  <div className="legend-item">
+                    <div className="legend-marker line-marker"></div>
+                    <span>Speed (WPM)</span>
+                  </div>
+                  <div className="legend-item">
+                    <div className="legend-marker error-marker">✕</div>
+                    <span>Errors</span>
+                  </div>
+                  <div className="legend-item">
+                    <div className="legend-marker backspace-marker">◄</div>
+                    <span>Backspaces</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* V2 Analytics: Digraph Latency Analysis */}
+          {digraphLatency && digraphLatency.length > 0 && (
+            <div className="analysis-panel">
+              <h2>Slowest Transitions</h2>
+              <p className="panel-description">
+                Flight time between specific letter pairs (digraphs) - identifying anatomical bottlenecks
+              </p>
+              
+              <h3>Top 10 Slowest Letter Pairs</h3>
+              <div className="digraph-table">
+                <div className="table-header">
+                  <span>Transition</span>
+                  <span>Finger Change</span>
+                  <span>Avg Latency</span>
+                  <span>Count</span>
+                </div>
+                {digraphLatency.slice(0, 10).map((digraph, idx) => (
+                  <div 
+                    key={idx} 
+                    className={`table-row ${digraph.sameFinger ? 'same-finger' : ''}`}
+                  >
+                    <span className="transition-chars">
+                      {digraph.char1} → {digraph.char2}
+                    </span>
+                    <span className="finger-change">{digraph.fingerChange}</span>
+                    <span className="latency-value">{digraph.avgLatency.toFixed(2)}ms</span>
+                    <span className="count-value">{digraph.count}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="info-note">
+                <span className="same-finger-indicator">Red rows</span> indicate same-finger transitions (mechanical jumps)
+              </p>
             </div>
           )}
 
@@ -689,42 +978,6 @@ function Analyzer() {
               )}
 
               <KeyboardHeatmap data={flightTimeByKey} title="Flight Time Heatmap" />
-            </div>
-          )}
-
-          {/* V2 Analytics: Digraph Latency Analysis */}
-          {digraphLatency && digraphLatency.length > 0 && (
-            <div className="analysis-panel">
-              <h2>Digraph Latency Analysis</h2>
-              <p className="panel-description">
-                Flight time between specific letter pairs (digraphs) - identifying anatomical bottlenecks
-              </p>
-              
-              <h3>Slowest Transitions (Top 10)</h3>
-              <div className="digraph-table">
-                <div className="table-header">
-                  <span>Transition</span>
-                  <span>Finger Change</span>
-                  <span>Avg Latency</span>
-                  <span>Count</span>
-                </div>
-                {digraphLatency.slice(0, 10).map((digraph, idx) => (
-                  <div 
-                    key={idx} 
-                    className={`table-row ${digraph.sameFinger ? 'same-finger' : ''}`}
-                  >
-                    <span className="transition-chars">
-                      {digraph.char1} → {digraph.char2}
-                    </span>
-                    <span className="finger-change">{digraph.fingerChange}</span>
-                    <span className="latency-value">{digraph.avgLatency.toFixed(2)}ms</span>
-                    <span className="count-value">{digraph.count}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="info-note">
-                <span className="same-finger-indicator">Red rows</span> indicate same-finger transitions (mechanical jumps)
-              </p>
             </div>
           )}
 
