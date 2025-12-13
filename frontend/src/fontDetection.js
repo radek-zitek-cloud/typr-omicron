@@ -74,7 +74,7 @@ export function detectAvailableMonospacedFonts() {
     if (isFontAvailable(fontName)) {
       availableFonts.push({
         value: fontName,
-        label: `${fontName}`
+        label: fontName
       });
     }
   }
