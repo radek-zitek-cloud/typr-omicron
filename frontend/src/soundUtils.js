@@ -5,11 +5,17 @@
 
 // Audio context singleton
 let audioContext = null;
+let contextResumed = false;
 
 // Initialize audio context on first use
 function getAudioContext() {
   if (!audioContext) {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.warn('Web Audio API not supported', e);
+      return null;
+    }
   }
   return audioContext;
 }
@@ -19,6 +25,8 @@ function getAudioContext() {
  */
 export function playCorrectSound() {
   const ctx = getAudioContext();
+  if (!ctx) return;
+  
   const oscillator = ctx.createOscillator();
   const gainNode = ctx.createGain();
   
@@ -29,9 +37,9 @@ export function playCorrectSound() {
   oscillator.frequency.value = 800;
   oscillator.type = 'sine';
   
-  // Short envelope
+  // Short envelope with linear ramp to avoid audio glitches
   gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+  gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.05);
   
   oscillator.start(ctx.currentTime);
   oscillator.stop(ctx.currentTime + 0.05);
@@ -42,6 +50,8 @@ export function playCorrectSound() {
  */
 export function playErrorSound() {
   const ctx = getAudioContext();
+  if (!ctx) return;
+  
   const oscillator = ctx.createOscillator();
   const gainNode = ctx.createGain();
   
@@ -52,9 +62,9 @@ export function playErrorSound() {
   oscillator.frequency.value = 200;
   oscillator.type = 'square';
   
-  // Short envelope
+  // Short envelope with linear ramp to avoid audio glitches
   gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+  gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.08);
   
   oscillator.start(ctx.currentTime);
   oscillator.stop(ctx.currentTime + 0.08);
@@ -62,10 +72,16 @@ export function playErrorSound() {
 
 /**
  * Resume audio context if it was suspended (for browsers that require user interaction)
+ * Returns true if context was resumed or already running, false otherwise
  */
 export function resumeAudioContext() {
   const ctx = getAudioContext();
-  if (ctx.state === 'suspended') {
+  if (!ctx) return false;
+  
+  if (ctx.state === 'suspended' && !contextResumed) {
     ctx.resume();
+    contextResumed = true;
+    return true;
   }
+  return ctx.state === 'running';
 }

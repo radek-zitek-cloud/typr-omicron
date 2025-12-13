@@ -55,6 +55,7 @@ function TypingTest() {
   const sessionStartTimeRef = useRef(null);
   const lastKeystrokeTimeRef = useRef(null);
   const textDisplayRef = useRef(null);
+  const audioContextResumedRef = useRef(false);
   const [trackTransform, setTrackTransform] = useState(0); // For kinetic tape mode centering
   // Track metrics
   const [totalKeystrokes, setTotalKeystrokes] = useState(0); // Mechanical: all keypresses
@@ -225,8 +226,8 @@ function TypingTest() {
   // Handle key down event
   const handleKeyDown = useCallback((e) => {
     // Resume audio context on first user interaction (required by browsers)
-    if (currentUser?.settings.soundEnabled) {
-      resumeAudioContext();
+    if (currentUser?.settings.soundEnabled && !audioContextResumedRef.current) {
+      audioContextResumedRef.current = resumeAudioContext();
     }
     
     // Prevent actions if we've completed the text (except in time mode where we generate more)
