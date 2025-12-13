@@ -72,17 +72,20 @@ export function playErrorSound() {
 
 /**
  * Resume audio context if it was suspended (for browsers that require user interaction)
- * Returns true if context was resumed or already running, false otherwise
+ * Note: This initiates an async resume operation but returns immediately.
+ * Returns true if resume was initiated or context is already running, false if unavailable.
+ * The actual resume happens asynchronously, but we only need to call this once.
  */
 export function resumeAudioContext() {
   const ctx = getAudioContext();
   if (!ctx) return false;
   
   if (ctx.state === 'suspended' && !contextResumed) {
-    ctx.resume().then(() => {
-      contextResumed = true;
-    }).catch(err => {
+    // Mark as resumed immediately to prevent multiple resume attempts
+    contextResumed = true;
+    ctx.resume().catch(err => {
       console.warn('Failed to resume audio context', err);
+      contextResumed = false; // Reset on failure to allow retry
     });
     return true;
   }
