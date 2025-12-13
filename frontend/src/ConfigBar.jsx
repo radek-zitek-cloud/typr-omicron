@@ -1,6 +1,11 @@
 import { useAppContext } from './AppContext';
 import './ConfigBar.css';
 
+/**
+ * ConfigBar component provides test mode configuration controls.
+ * Allows users to select between Time Mode and Word Count Mode,
+ * and choose specific durations or word counts.
+ */
 function ConfigBar() {
   const { testConfig, setTestConfig } = useAppContext();
 

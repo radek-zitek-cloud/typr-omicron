@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { useAppContext } from './AppContext';
 import './UserProfile.css';
 
+/**
+ * UserProfile component provides user management UI in the header.
+ * Allows switching between users and creating new user profiles.
+ */
 function UserProfile() {
   const { currentUser, users, createUser, switchUser } = useAppContext();
   const [isCreating, setIsCreating] = useState(false);

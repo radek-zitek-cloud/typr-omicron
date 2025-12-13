@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { useAppContext } from './AppContext';
 import './Settings.css';
 
+/**
+ * Settings component provides user customization options.
+ * Includes font family/size selection and custom word source management.
+ */
 function Settings() {
   const { currentUser, updateUserSettings } = useAppContext();
   const [pasteText, setPasteText] = useState('');

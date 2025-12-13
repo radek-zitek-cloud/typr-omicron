@@ -2,6 +2,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from './AppContext';
 import './History.css';
 
+/**
+ * History component displays a list of past typing test sessions.
+ * Shows session details, performance metrics, and a WPM trend sparkline.
+ * Provides navigation to detailed analysis for each session.
+ */
 function History() {
   const { getUserSessions } = useAppContext();
   const navigate = useNavigate();
