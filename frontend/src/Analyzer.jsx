@@ -484,19 +484,18 @@ function Analyzer() {
             // Count character typed
             buckets[bucketIndex].charsTyped++;
             
-            // Check if this was an error
-            const currentIndex = event.currentIndex;
-            if (currentIndex !== undefined && currentIndex >= 0 && currentIndex < charStates.length) {
-              const charState = charStates[currentIndex];
-              if (charState && (charState.status === 'incorrect' || charState.status === 'corrected')) {
-                errorMarkers.push({
-                  timestamp: event.timestamp,
-                  relativeTime: (event.timestamp - sessionStartTime) / 1000,
-                  expected: event.expectedChar,
-                  actual: event.key
-                });
-                buckets[bucketIndex].errors.push(event.timestamp);
-              }
+            // Check if this was an error by comparing with expected character
+            const expectedChar = event.expectedChar;
+            
+            // This is an error if the key doesn't match the expected character
+            if (expectedChar && event.key !== expectedChar) {
+              errorMarkers.push({
+                timestamp: event.timestamp,
+                relativeTime: (event.timestamp - sessionStartTime) / 1000,
+                expected: expectedChar,
+                actual: event.key
+              });
+              buckets[bucketIndex].errors.push(event.timestamp);
             }
           }
         }
