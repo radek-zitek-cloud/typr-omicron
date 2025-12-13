@@ -43,6 +43,7 @@
   color: #888;
 }
 
+/* Tape Mode: GPU-accelerated viewport container */
 .text-container {
   position: relative;
   width: 100%;
@@ -51,56 +52,72 @@
   overflow: hidden;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   background-color: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
   padding: 2rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* Tape Mode: Text track moves horizontally, not the viewport */
 .text-display {
+  position: absolute;
   font-size: 2rem;
   font-family: 'Courier New', monospace;
   white-space: nowrap;
-  transition: transform 0.15s ease-out;
+  /* GPU-accelerated smooth animation */
+  transition: transform 0.1s ease-out;
   line-height: 1.5;
   letter-spacing: 0.05em;
+  /* Disable text selection and interaction - this is graphics mode */
+  user-select: none;
+  pointer-events: none;
+  /* Use GPU compositing for better performance */
+  will-change: transform;
+  left: 50%;
 }
 
+/* Base character styling - "pending" state */
 .char {
   position: relative;
+  display: inline-block;
   color: #666;
-  transition: color 0.1s ease;
+  opacity: 0.5;
+  transition: color 0.1s ease, opacity 0.1s ease, transform 0.1s ease;
 }
 
+/* Correct state - green like Monkeytype */
 .char.correct {
-  color: #4ade80;
+  color: #E2B714;
+  opacity: 1;
 }
 
+/* Incorrect/Error state - red */
 .char.incorrect {
   color: #f87171;
   background-color: rgba(248, 113, 113, 0.2);
+  opacity: 1;
 }
 
+/* Corrected state - orange (after backspace correction) */
 .char.corrected {
   color: #fb923c;
   background-color: rgba(251, 146, 60, 0.2);
+  opacity: 1;
 }
 
-.char.current {
+/* Active character - locked at focal point with scale highlight */
+.char.active {
   color: #fff;
   font-weight: bold;
+  opacity: 1;
+  transform: scale(1.1);
 }
 
-.char.current::before {
-  content: '';
-  position: absolute;
-  left: -2px;
-  top: -4px;
-  bottom: -4px;
-  width: 3px;
-  background-color: #646cff;
-  animation: blink 1s infinite;
+/* Pending characters (not yet typed) */
+.char.pending {
+  opacity: 0.5;
+  color: #666;
 }
 
 @keyframes blink {
@@ -112,14 +129,18 @@
   }
 }
 
+/* Caret overlay - fixed at center (50%) with higher z-index */
 .caret-line {
   position: absolute;
   left: 50%;
   top: 0;
   bottom: 0;
   width: 2px;
-  background-color: rgba(100, 108, 255, 0.3);
+  background-color: rgba(100, 108, 255, 0.8);
   pointer-events: none;
+  z-index: 10;
+  transform: translateX(-50%);
+  animation: blink 1s infinite;
 }
 
 .instructions {

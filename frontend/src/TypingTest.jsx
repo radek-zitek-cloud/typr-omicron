@@ -4,9 +4,6 @@ import ConfigBar from './ConfigBar';
 import './TypingTest.css';
 import wordsData from './words.json';
 
-// Configuration constants
-const SCROLL_SPEED_MULTIPLIER = 0.6; // Controls how fast the text scrolls
-
 // Helper function to get word source
 function getWordSource() {
   const customWords = localStorage.getItem('typr_custom_words');
@@ -57,7 +54,7 @@ function TypingTest() {
   const sessionStartTimeRef = useRef(null);
   const lastKeystrokeTimeRef = useRef(null);
   const textDisplayRef = useRef(null);
-  const [charWidth, setCharWidth] = useState(SCROLL_SPEED_MULTIPLIER);
+  const [trackTransform, setTrackTransform] = useState(0); // For kinetic tape mode centering
   // Track metrics
   const [totalKeystrokes, setTotalKeystrokes] = useState(0); // Mechanical: all keypresses
   const [maxIndexReached, setMaxIndexReached] = useState(0); // Productive: unique indices visited
@@ -81,25 +78,28 @@ function TypingTest() {
     firstTimeErrorsRef.current = firstTimeErrors;
   }, [text, charStates, events, totalKeystrokes, maxIndexReached, firstTimeErrors]);
 
-  // Measure character width for precise scrolling
+  // Kinetic Text Centering Algorithm
+  // Calculate the translateX value to lock the active character at viewport center (50%)
   useEffect(() => {
-    if (textDisplayRef.current) {
-      // Get the first character element to measure its width
-      const firstChar = textDisplayRef.current.querySelector('.char');
-      if (firstChar) {
-        const rect = firstChar.getBoundingClientRect();
-        const computedStyle = getComputedStyle(textDisplayRef.current);
-        if (computedStyle && computedStyle.fontSize) {
-          const fontSize = parseFloat(computedStyle.fontSize);
-          // Convert pixel width to em units, fallback to SCROLL_SPEED_MULTIPLIER if invalid
-          const widthInEm = rect.width / fontSize;
-          if (!isNaN(widthInEm) && widthInEm > 0) {
-            setCharWidth(widthInEm);
-          }
-        }
+    if (textDisplayRef.current && currentIndex >= 0) {
+      const chars = textDisplayRef.current.querySelectorAll('.char');
+      if (chars[currentIndex]) {
+        // Get the active character's position
+        const activeChar = chars[currentIndex];
+        
+        // Use offsetLeft and offsetWidth to avoid expensive getBoundingClientRect()
+        const charCenterOffset = (activeChar.offsetLeft || 0) + ((activeChar.offsetWidth || 0) / 2);
+        
+        // We want to center this at 0 (since track is positioned at left: 50%)
+        // Transform = negative of the offset to bring it to center
+        const newTransform = -charCenterOffset;
+        
+        // This is a valid use of setState in effect - we're synchronizing with DOM measurements
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTrackTransform(newTransform);
       }
     }
-  }, [text]); // Recalculate when text changes
+  }, [currentIndex, text]); // Recalculate when current index or text changes
 
   // Helper to calculate target character count from word count
   const calculateTargetChars = useCallback((wordCount) => {
@@ -364,22 +364,25 @@ function TypingTest() {
     setEvents(prev => [...prev, eventData]);
   }, [currentIndex, text]);
 
-  // Render individual character with styling
+  // Render individual character with styling (Kinetic Tape Mode)
   const renderCharacter = (charState, index) => {
     let className = 'char';
     // Display user's typed character if available, otherwise show expected character
     const displayChar = charState.userBuffer || charState.char;
     
-    // Determine class based on status
-    if (charState.status === 'correct') {
+    // Determine class based on status and position
+    if (index === currentIndex) {
+      // Active character - locked at focal point
+      className += ' active current';
+    } else if (charState.status === 'correct') {
       className += ' correct';
     } else if (charState.status === 'incorrect') {
       className += ' incorrect';
     } else if (charState.status === 'corrected') {
       className += ' corrected';
-    } else if (index === currentIndex) {
-      // Current character (caret position)
-      className += ' current';
+    } else if (charState.status === 'pending') {
+      // Pending character - not yet typed
+      className += ' pending';
     }
 
     return (
@@ -455,19 +458,21 @@ function TypingTest() {
       <ConfigBar />
 
       <div className="text-container">
+        {/* Caret overlay - fixed at center (50%) */}
+        <div className="caret-line"></div>
+        
+        {/* Text track - moves horizontally to keep active char centered */}
         <div 
           ref={textDisplayRef}
           className="text-display" 
           style={{
-            transform: `translateX(${-currentIndex * charWidth}em)`,
-            marginLeft: '50%',
+            transform: `translateX(${trackTransform}px)`,
             fontFamily: getFontFamily(),
             fontSize: getFontSize()
           }}
         >
           {charStates.map((charState, index) => renderCharacter(charState, index))}
         </div>
-        <div className="caret-line"></div>
       </div>
 
       <div className="instructions">
