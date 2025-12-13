@@ -12,10 +12,11 @@ A React-based web application designed to measure and analyze touch typing skill
   - Smooth horizontal scrolling of text
 - **Precise Event Tracking**: Records all keyboard events (keydown/keyup) with millisecond precision
 - **Backspace Support**: Users can backtrack and correct mistakes
-- **Automatic Session Management**:
+- **Manual Session Control**:
   - Timer starts on first keystroke
-  - Session ends after 5 seconds of inactivity
+  - End session manually with the "End Session" button
   - Automatic JSON export of session data
+  - Accurate duration tracking (excludes time after last keystroke)
 - **Performance Metrics**: Real-time display of characters typed and accuracy percentage
 
 ## Getting Started
@@ -62,7 +63,7 @@ npm run preview
 2. Start typing - the timer will begin automatically with your first keystroke
 3. Type the displayed words as accurately as possible
 4. Use backspace to correct mistakes
-5. After 5 seconds of inactivity, the session will automatically end and download a JSON file with your session data
+5. Click the "End Session" button when you're finished to download a JSON file with your session data
 
 ## Session Data
 
@@ -88,24 +89,12 @@ The application exports a JSON file containing:
 
 The word list can be customized by editing `src/words.json`. This file contains an array of English words used for the typing test.
 
-### Session Timeout
+### Scroll Speed
 
-To change the inactivity timeout (default: 5 seconds), modify the timeout value in `src/TypingTest.jsx`:
-
-```javascript
-inactivityTimerRef.current = setTimeout(() => {
-  endSession();
-}, 5000); // Change this value (in milliseconds)
-```
-
-### Scroll Threshold
-
-To adjust when text scrolling begins (default: after 20 characters), modify the threshold in `src/TypingTest.jsx`:
+To adjust the text scrolling speed, modify the `SCROLL_SPEED_MULTIPLIER` constant in `src/TypingTest.jsx`:
 
 ```javascript
-if (currentIndex > 20) { // Change this value
-  setScrollOffset(prev => prev + 1);
-}
+const SCROLL_SPEED_MULTIPLIER = 0.6; // Controls how fast the text scrolls
 ```
 
 ## Technology Stack

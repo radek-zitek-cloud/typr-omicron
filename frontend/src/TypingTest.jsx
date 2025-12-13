@@ -3,7 +3,6 @@ import './TypingTest.css';
 import wordsData from './words.json';
 
 // Configuration constants
-const INACTIVITY_TIMEOUT_MS = 5000; // 5 seconds
 const SCROLL_SPEED_MULTIPLIER = 0.6; // Controls how fast the text scrolls
 
 // Helper function to generate random text and initialize char states
@@ -32,8 +31,8 @@ function TypingTest() {
   const [events, setEvents] = useState([]);
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
-  const inactivityTimerRef = useRef(null);
   const sessionStartTimeRef = useRef(null);
+  const lastKeystrokeTimeRef = useRef(null);
   const textDisplayRef = useRef(null);
   const [charWidth, setCharWidth] = useState(SCROLL_SPEED_MULTIPLIER);
   // Track metrics
@@ -90,10 +89,11 @@ function TypingTest() {
 
   // Helper function to build session data for export
   const buildSessionData = useCallback(() => {
-    // Calculate session duration
-    const duration = sessionStartTimeRef.current 
-      ? Date.now() - sessionStartTimeRef.current 
-      : 0;
+    // Calculate session duration up to the last keystroke
+    // This removes the trailing time between last keystroke and end of session
+    const startTime = sessionStartTimeRef.current;
+    const endTime = lastKeystrokeTimeRef.current || sessionStartTimeRef.current || Date.now();
+    const duration = startTime ? endTime - startTime : 0;
     const durationInMinutes = duration / 60000;
     
     // Calculate metrics
@@ -126,55 +126,38 @@ function TypingTest() {
     };
   }, []);
 
+  // Helper function to download session data as JSON file
+  const downloadSessionFile = useCallback((sessionData) => {
+    const dataStr = JSON.stringify(sessionData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `typing-session-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
   // End session and export data
   const endSession = useCallback(() => {
     setSessionActive(false);
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current);
-      inactivityTimerRef.current = null;
-    }
-    
     const sessionData = buildSessionData();
+    downloadSessionFile(sessionData);
+  }, [buildSessionData, downloadSessionFile]);
 
-    const dataStr = JSON.stringify(sessionData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `typing-session-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [buildSessionData]);
-
-  // Reset inactivity timer
-  const resetInactivityTimer = useCallback(() => {
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current);
-    }
-    
-    inactivityTimerRef.current = setTimeout(() => {
-      endSession();
-    }, INACTIVITY_TIMEOUT_MS);
-  }, [endSession]);
-
-  // Export session data as JSON (for manual export button)
-  const exportData = useCallback(() => {
+  // Download session data without modifying state (for already-ended sessions)
+  const downloadSessionData = useCallback(() => {
     const sessionData = buildSessionData();
-
-    const dataStr = JSON.stringify(sessionData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `typing-session-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [buildSessionData]);
+    downloadSessionFile(sessionData);
+  }, [buildSessionData, downloadSessionFile]);
 
   // Handle key down event
   const handleKeyDown = useCallback((e) => {
     // Prevent actions if we've completed the text
     if (currentIndex >= text.length) return;
+    
+    // Prevent actions if session ended (but allow starting new session)
+    if (sessionStarted && !sessionActive) return;
     
     // Start session on first keystroke
     if (!sessionStarted) {
@@ -182,6 +165,9 @@ function TypingTest() {
       setSessionActive(true);
       sessionStartTimeRef.current = Date.now();
     }
+
+    // Update last keystroke time for every keystroke
+    lastKeystrokeTimeRef.current = Date.now();
 
     const eventData = {
       type: 'keydown',
@@ -194,7 +180,6 @@ function TypingTest() {
     };
 
     setEvents(prev => [...prev, eventData]);
-    resetInactivityTimer();
 
     // Handle backspace (State 3: Correction)
     if (e.key === 'Backspace') {
@@ -274,10 +259,11 @@ function TypingTest() {
 
       // Check if we've reached the end of the text (after incrementing)
       if (currentIndex + 1 >= text.length) {
-        endSession();
+        // Don't auto-end session, just let the user end it manually
+        // The session remains active for the user to end it when ready
       }
     }
-  }, [sessionStarted, currentIndex, text, resetInactivityTimer, endSession]);
+  }, [sessionStarted, sessionActive, currentIndex, text]);
 
   // Handle key up event
   const handleKeyUp = useCallback((e) => {
@@ -345,10 +331,7 @@ function TypingTest() {
     setMaxIndexReached(0);
     setFirstTimeErrors(new Set());
     sessionStartTimeRef.current = null;
-    
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current);
-    }
+    lastKeystrokeTimeRef.current = null;
   };
 
   return (
@@ -386,15 +369,20 @@ function TypingTest() {
       <div className="instructions">
         {!sessionStarted ? (
           <p>Start typing to begin the test. The timer starts on your first keystroke.</p>
+        ) : sessionActive ? (
+          <p>Click "End Session" when you're done to save your results.</p>
         ) : (
-          <p>Session will end after 5 seconds of inactivity.</p>
+          <p>Session ended. Download your results or reset to try again.</p>
         )}
       </div>
 
       <div className="controls">
         <button onClick={reset}>Reset</button>
+        {sessionActive && (
+          <button onClick={endSession} className="end-session-btn">End Session</button>
+        )}
         {sessionStarted && !sessionActive && (
-          <button onClick={exportData}>Download Session Data</button>
+          <button onClick={downloadSessionData}>Download Session Data</button>
         )}
       </div>
     </div>

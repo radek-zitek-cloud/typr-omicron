@@ -154,6 +154,15 @@
   transform: translateY(0);
 }
 
+.controls .end-session-btn {
+  background-color: #f87171;
+}
+
+.controls .end-session-btn:hover {
+  background-color: #ef4444;
+  box-shadow: 0 4px 12px rgba(248, 113, 113, 0.4);
+}
+
 @media (prefers-color-scheme: light) {
   .text-container {
     background-color: rgba(0, 0, 0, 0.03);
