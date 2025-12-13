@@ -79,8 +79,11 @@ export function resumeAudioContext() {
   if (!ctx) return false;
   
   if (ctx.state === 'suspended' && !contextResumed) {
-    ctx.resume();
-    contextResumed = true;
+    ctx.resume().then(() => {
+      contextResumed = true;
+    }).catch(err => {
+      console.warn('Failed to resume audio context', err);
+    });
     return true;
   }
   return ctx.state === 'running';

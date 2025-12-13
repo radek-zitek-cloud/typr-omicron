@@ -227,7 +227,11 @@ function TypingTest() {
   const handleKeyDown = useCallback((e) => {
     // Resume audio context on first user interaction (required by browsers)
     if (currentUser?.settings.soundEnabled && !audioContextResumedRef.current) {
-      audioContextResumedRef.current = resumeAudioContext();
+      const resumed = resumeAudioContext();
+      // Only set to true if context is available and resume was initiated or already running
+      if (resumed) {
+        audioContextResumedRef.current = true;
+      }
     }
     
     // Prevent actions if we've completed the text (except in time mode where we generate more)
