@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from './AppContext';
 import './History.css';
@@ -10,7 +11,25 @@ import './History.css';
 function History() {
   const { getUserSessions } = useAppContext();
   const navigate = useNavigate();
-  const sessions = getUserSessions();
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const loadSessions = async () => {
+      setLoading(true);
+      try {
+        const data = await getUserSessions();
+        setSessions(data || []);
+      } catch (error) {
+        console.error('Failed to load sessions:', error);
+        setSessions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadSessions();
+  }, [getUserSessions]);
 
   const formatDate = (timestamp) => {
     const date = new Date(timestamp);
@@ -45,6 +64,19 @@ function History() {
     // Navigate to analyzer with session data
     navigate(`/analyzer?session=${sessionId}`);
   };
+
+  if (loading) {
+    return (
+      <div className="history">
+        <div className="header">
+          <h1>Session History</h1>
+        </div>
+        <div className="empty-state">
+          <p>Loading sessions...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Calculate sparkline data (last 10 sessions)
   const recentSessions = sessions.slice(0, 10).reverse();

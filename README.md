@@ -16,6 +16,9 @@ This project provides a web-based typing test application that records detailed 
 - **Backspace Support**: Full support for corrections and backtracking
 - **Performance Metrics**: Real-time accuracy and character count display
 - **Accurate Duration Tracking**: Session duration excludes trailing time after the last keystroke
+- **Database Persistence**: SQLite backend stores user profiles, settings, and session history
+- **User Profiles**: Multiple user support with individual settings and session tracking
+- **Fallback Storage**: Automatic fallback to localStorage when backend is unavailable
 
 ### V2 Analytics Features
 
@@ -25,6 +28,17 @@ This project provides a web-based typing test application that records detailed 
 - **Shift Key Penalty**: Measures the biomechanical cost of using capital letters compared to lowercase
 
 ## Getting Started
+
+### Quick Start
+
+```bash
+# Clone and start the application
+git clone https://github.com/radek-zitek-cloud/typr-omicron.git
+cd typr-omicron
+./start.sh
+```
+
+This will install dependencies (if needed) and start both backend and frontend servers.
 
 ### Prerequisites
 
@@ -38,12 +52,37 @@ This project provides a web-based typing test application that records detailed 
 git clone https://github.com/radek-zitek-cloud/typr-omicron.git
 cd typr-omicron
 
+# Install backend dependencies
+cd backend
+npm install
+cd ..
+
 # Install frontend dependencies
 cd frontend
 npm install
+cd ..
 ```
 
 ### Running the Application
+
+**Option 1: With Backend (Recommended)**
+
+```bash
+# Terminal 1 - Start the backend server
+cd backend
+npm start
+
+# Terminal 2 - Start the frontend
+cd frontend
+npm run dev
+```
+
+The backend will be available at `http://localhost:3001/`
+The frontend will be available at `http://localhost:5173/`
+
+When the backend is running, all data (user profiles, settings, and session history) will be persisted in a SQLite database. If the backend is not available, the application will fall back to using localStorage.
+
+**Option 2: Without Backend (localStorage only)**
 
 ```bash
 # Development mode
@@ -51,26 +90,42 @@ cd frontend
 npm run dev
 ```
 
-The application will be available at `http://localhost:5173/`
+The application will be available at `http://localhost:5173/` and will use localStorage for data persistence.
 
 ### Building for Production
 
 ```bash
+# Build frontend
 cd frontend
 npm run build
+
+# Build backend (backend runs directly from source)
+cd backend
+npm install --production
 ```
 
-The built files will be in the `frontend/dist/` directory.
+The frontend built files will be in the `frontend/dist/` directory.
 
 ## Project Structure
 
 ```
 typr-omicron/
+├── backend/               # Express API server with SQLite
+│   ├── src/
+│   │   ├── routes/           # API route handlers
+│   │   ├── database.js       # Database setup and schema
+│   │   └── index.js          # Express server entry point
+│   ├── data/                 # SQLite database files (gitignored)
+│   ├── package.json
+│   └── README.md
 ├── frontend/              # React web application
 │   ├── src/
 │   │   ├── TypingTest.jsx    # Main typing test component
-│   │   ├── TypingTest.css    # Component styles
-│   │   ├── words.json        # Word configuration file
+│   │   ├── Analyzer.jsx      # Session analysis and statistics
+│   │   ├── AppContext.jsx    # Global state and API integration
+│   │   ├── apiService.js     # Backend API service layer
+│   │   ├── History.jsx       # Session history viewer
+│   │   ├── Settings.jsx      # User settings management
 │   │   ├── App.jsx           # App entry point
 │   │   └── main.jsx          # React entry point
 │   ├── package.json
@@ -80,10 +135,12 @@ typr-omicron/
 
 ## Technology Stack
 
+- **Backend**: Node.js, Express.js 5.x, SQLite (better-sqlite3)
 - **Frontend**: React 19, Vite
 - **Styling**: CSS3 with animations
 - **Build Tool**: Vite
 - **Code Quality**: ESLint
+- **Data Persistence**: SQLite database (with localStorage fallback)
 
 ## Session Data Format
 
