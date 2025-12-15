@@ -13,23 +13,33 @@ function History() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  
+  const loadSessions = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('History: Loading sessions...');
+      const data = await getUserSessions();
+      console.log('History: Loaded sessions:', data?.length || 0);
+      setSessions(data || []);
+    } catch (error) {
+      console.error('History: Failed to load sessions:', error);
+      setError(error.message || 'Failed to load sessions');
+      setSessions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   useEffect(() => {
-    const loadSessions = async () => {
-      setLoading(true);
-      try {
-        const data = await getUserSessions();
-        setSessions(data || []);
-      } catch (error) {
-        console.error('Failed to load sessions:', error);
-        setSessions([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     loadSessions();
-  }, [getUserSessions]);
+  }, [getUserSessions, refreshKey]);
+  
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   const formatDate = (timestamp) => {
     const date = new Date(timestamp);
@@ -89,7 +99,16 @@ function History() {
     <div className="history">
       <div className="header">
         <h1>Session History</h1>
+        <button onClick={handleRefresh} className="refresh-btn" disabled={loading}>
+          {loading ? '🔄 Loading...' : '🔄 Refresh'}
+        </button>
       </div>
+
+      {error && (
+        <div className="error-message">
+          ⚠️ {error}
+        </div>
+      )}
 
       {sessions.length > 0 && (
         <div className="sparkline-container">

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from './AppContext';
 import { getAvailableMonospacedFonts } from './fontDetection';
 import './Settings.css';
@@ -10,9 +10,17 @@ import './Settings.css';
 function Settings() {
   const { currentUser, updateUserSettings } = useAppContext();
   const [pasteText, setPasteText] = useState('');
+  const [fonts, setFonts] = useState([]);
   
-  // Detect available monospaced fonts (memoized to avoid re-detection on re-renders)
-  const fonts = useMemo(() => getAvailableMonospacedFonts(), []);
+  // Load available monospaced fonts (async because of Font Access API)
+  useEffect(() => {
+    getAvailableMonospacedFonts().then(loadedFonts => {
+      setFonts(loadedFonts);
+    }).catch(error => {
+      console.error('Error loading fonts:', error);
+      setFonts([{ value: 'monospace', label: 'Monospace' }]);
+    });
+  }, []);
 
   const fontSizes = [
     { value: 'S', label: 'Small' },

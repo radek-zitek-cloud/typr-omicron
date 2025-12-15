@@ -7,6 +7,7 @@ const router = express.Router();
 router.get('/', (req, res) => {
   try {
     const users = db.prepare('SELECT user_id, username, created_at FROM users').all();
+    console.log(`Fetched ${users.length} users from database`);
     res.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -36,11 +37,16 @@ router.post('/', (req, res) => {
   try {
     const { username } = req.body;
     
+    console.log('Received user creation request:', { username });
+    
     if (!username) {
+      console.error('Username is required but not provided');
       return res.status(400).json({ error: 'Username is required' });
     }
     
     const userId = `user_${Date.now()}`;
+    
+    console.log('Creating user with ID:', userId);
     
     // Insert user
     const insertUser = db.prepare('INSERT INTO users (user_id, username) VALUES (?, ?)');
@@ -51,6 +57,8 @@ router.post('/', (req, res) => {
     insertSettings.run(userId);
     
     const user = db.prepare('SELECT user_id, username, created_at FROM users WHERE user_id = ?').get(userId);
+    
+    console.log('User created successfully:', user);
     res.status(201).json(user);
   } catch (error) {
     console.error('Error creating user:', error);

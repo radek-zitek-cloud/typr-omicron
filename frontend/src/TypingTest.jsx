@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { useAppContext } from './AppContext';
 import ConfigBar from './ConfigBar';
 import './TypingTest.css';
 import wordsData from './words.json';
 import { playCorrectSound, playErrorSound, resumeAudioContext } from './soundUtils';
+import { getAvailableMonospacedFonts } from './fontDetection';
 
 // Helper function to get word source
 function getWordSource() {
@@ -21,113 +22,115 @@ function getWordSource() {
   return wordsData;
 }
 
-// Helper function to generate random text and initialize char states
-function initializeTextAndStates(wordsData, wordCount = 50) {
+// Helper function to generate random text
+function generateText(wordCount = 50) {
   const words = [];
   const source = getWordSource();
   for (let i = 0; i < wordCount; i++) {
     const randomWord = source[Math.floor(Math.random() * source.length)];
     words.push(randomWord);
   }
-  const textStr = words.join(' ');
-  const initialStates = textStr.split('').map(char => ({
-    char: char,
-    userBuffer: null,
-    status: 'pending' // pending, correct, incorrect, corrected
-  }));
-  return { text: textStr, charStates: initialStates };
+  return words.join(' ');
 }
 
+// Memoized character component - only re-renders when props change
+const Character = memo(({ char, userChar, status, isActive }) => {
+  let className = 'char';
+  const displayChar = userChar || char;
+  
+  if (isActive) {
+    className += ' active current';
+  } else if (status === 'correct') {
+    className += ' correct';
+  } else if (status === 'incorrect') {
+    className += ' incorrect';
+  } else if (status === 'corrected') {
+    className += ' corrected';
+  } else if (status === 'pending') {
+    className += ' pending';
+  }
+
+  return <span className={className}>{displayChar}</span>;
+}, (prevProps, nextProps) => {
+  // Custom comparison - only re-render if these specific props changed
+  return prevProps.userChar === nextProps.userChar &&
+         prevProps.status === nextProps.status &&
+         prevProps.isActive === nextProps.isActive;
+});
+
+Character.displayName = 'Character';
+
 function TypingTest() {
-  const { testConfig, saveSession, currentUser } = useAppContext();
+  const { testConfig, saveSession, currentUser, updateUserSettings } = useAppContext();
   
-  // Generate initial data based on test config
-  const initialWordCount = testConfig.mode === 'words' ? testConfig.wordCount : 200; // More words for time mode
-  const initialData = useMemo(() => initializeTextAndStates(wordsData, initialWordCount), [initialWordCount]);
+  // Generate initial text
+  const initialWordCount = testConfig.mode === 'words' ? testConfig.wordCount : 200;
+  const initialText = useMemo(() => generateText(initialWordCount), [initialWordCount]);
   
-  const [text, setText] = useState(initialData.text);
-  const [charStates, setCharStates] = useState(initialData.charStates);
+  const [text, setText] = useState(initialText);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [events, setEvents] = useState([]);
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState(null); // For time mode
+  const [timeRemaining, setTimeRemaining] = useState(null);
+  const [saveStatus, setSaveStatus] = useState(null);
+  const [availableFonts, setAvailableFonts] = useState([]);
+  const [showControls, setShowControls] = useState(false);
+  
+  // Use refs for high-frequency updates to avoid re-renders
+  const userInputRef = useRef(new Array(text.length).fill(null)); // User's typed characters
+  const statusRef = useRef(new Array(text.length).fill('pending')); // Character statuses
+  const eventsRef = useRef([]); // Keystroke events
   const sessionStartTimeRef = useRef(null);
   const lastKeystrokeTimeRef = useRef(null);
   const textDisplayRef = useRef(null);
   const audioContextResumedRef = useRef(false);
-  const [trackTransform, setTrackTransform] = useState(0); // For kinetic tape mode centering
-  // Track metrics
-  const [totalKeystrokes, setTotalKeystrokes] = useState(0); // Mechanical: all keypresses
-  const [maxIndexReached, setMaxIndexReached] = useState(0); // Productive: unique indices visited
-  const [firstTimeErrors, setFirstTimeErrors] = useState(new Set()); // Positions with first-attempt error
   
-  // Refs to store latest values for timeout callback
-  const textRef = useRef(text);
-  const charStatesRef = useRef(charStates);
-  const eventsRef = useRef(events);
-  const totalKeystrokesRef = useRef(totalKeystrokes);
-  const maxIndexReachedRef = useRef(maxIndexReached);
-  const firstTimeErrorsRef = useRef(firstTimeErrors);
+  // Metrics refs
+  const totalKeystrokesRef = useRef(0);
+  const maxIndexReachedRef = useRef(0);
+  const firstTimeErrorsRef = useRef(new Set());
   
-  // Update refs when state changes
-  useEffect(() => {
-    textRef.current = text;
-    charStatesRef.current = charStates;
-    eventsRef.current = events;
-    totalKeystrokesRef.current = totalKeystrokes;
-    maxIndexReachedRef.current = maxIndexReached;
-    firstTimeErrorsRef.current = firstTimeErrors;
-  }, [text, charStates, events, totalKeystrokes, maxIndexReached, firstTimeErrors]);
-
-  // Kinetic Text Centering Algorithm
-  // Calculate the translateX value to lock the active character at viewport center (50%)
-  useEffect(() => {
-    if (textDisplayRef.current && currentIndex >= 0) {
-      const chars = textDisplayRef.current.querySelectorAll('.char');
+  // Track keydown timestamps for dwell time calculation
+  const keyDownTimestampsRef = useRef(new Map());
+  
+  // Force update function - only when we need to re-render
+  const [, forceUpdate] = useState({});
+  const triggerRender = useCallback(() => forceUpdate({}), []);
+  
+  // Track transform for centering
+  const [trackTransform, setTrackTransform] = useState(0);
+  
+  // Optimized centering - use requestAnimationFrame batching
+  const updateCentering = useCallback(() => {
+    if (textDisplayRef.current) {
+      const chars = textDisplayRef.current.children;
       if (chars[currentIndex]) {
-        // Get the active character's position
         const activeChar = chars[currentIndex];
-        
-        // Use offsetLeft and offsetWidth to avoid expensive getBoundingClientRect()
-        const charCenterOffset = (activeChar.offsetLeft || 0) + ((activeChar.offsetWidth || 0) / 2);
-        
-        // We want to center this at 0 (since track is positioned at left: 50%)
-        // Transform = negative of the offset to bring it to center
-        const newTransform = -charCenterOffset;
-        
-        // This is a valid use of setState in effect - we're synchronizing with DOM measurements
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setTrackTransform(newTransform);
+        const charCenterOffset = activeChar.offsetLeft + (activeChar.offsetWidth / 2);
+        setTrackTransform(-charCenterOffset);
       }
     }
-  }, [currentIndex, text]); // Recalculate when current index or text changes
+  }, [currentIndex]);
+  
+  // Batch centering updates with RAF
+  useEffect(() => {
+    requestAnimationFrame(updateCentering);
+  }, [currentIndex, updateCentering]);
 
-  // Helper to calculate target character count from word count
-  const calculateTargetChars = useCallback((wordCount) => {
-    // Approximate: average word length + 1 space
-    return wordCount * 6; // Rough estimate
-  }, []);
-
-  // Calculate accuracy - productive accuracy only (first-time attempts)
+  // Calculate accuracy
   const calculateAccuracy = useCallback((maxReached, errors) => {
     if (maxReached === 0) return 100;
-    const productiveChars = maxReached;
-    const firstTimeErrorCount = errors.size;
-    const correct = productiveChars - firstTimeErrorCount;
-    return ((correct / productiveChars) * 100).toFixed(2);
+    const correct = maxReached - errors.size;
+    return ((correct / maxReached) * 100).toFixed(2);
   }, []);
 
-  // Helper function to build session data for export
+  // Build session data
   const buildSessionData = useCallback(() => {
-    // Calculate session duration up to the last keystroke
-    // This removes the trailing time between last keystroke and end of session
     const startTime = sessionStartTimeRef.current;
     const endTime = lastKeystrokeTimeRef.current || sessionStartTimeRef.current || Date.now();
     const duration = startTime ? endTime - startTime : 0;
     const durationInMinutes = duration / 60000;
     
-    // Calculate metrics
     const mechanicalCPM = durationInMinutes > 0 
       ? (totalKeystrokesRef.current / durationInMinutes).toFixed(2)
       : 0;
@@ -136,15 +139,19 @@ function TypingTest() {
       : 0;
     const accuracy = calculateAccuracy(maxIndexReachedRef.current, firstTimeErrorsRef.current);
     
-    // Build user input string from charStates
-    const userInputStr = charStatesRef.current
-      .map(cs => cs.userBuffer !== null ? cs.userBuffer : '')
-      .join('');
+    // Build charStates from refs
+    const charStates = text.split('').map((char, idx) => ({
+      char,
+      userBuffer: userInputRef.current[idx],
+      status: statusRef.current[idx]
+    }));
+    
+    const userInputStr = userInputRef.current.slice(0, maxIndexReachedRef.current).join('');
     
     return {
-      text: textRef.current,
+      text,
       userInput: userInputStr,
-      charStates: charStatesRef.current,
+      charStates,
       events: eventsRef.current,
       sessionDuration: duration,
       mechanicalCPM: parseFloat(mechanicalCPM),
@@ -155,9 +162,8 @@ function TypingTest() {
       firstTimeErrors: Array.from(firstTimeErrorsRef.current),
       timestamp: new Date().toISOString()
     };
-  }, [calculateAccuracy]);
+  }, [text, calculateAccuracy]);
 
-  // Helper function to download session data as JSON file
   const downloadSessionFile = useCallback((sessionData) => {
     const dataStr = JSON.stringify(sessionData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
@@ -169,31 +175,40 @@ function TypingTest() {
     URL.revokeObjectURL(url);
   }, []);
 
-  // End session and export data
-  const endSession = useCallback(() => {
+  const endSession = useCallback(async () => {
     setSessionActive(false);
     const sessionData = buildSessionData();
     
-    // Save to context/localStorage
     if (saveSession) {
-      saveSession(sessionData);
+      setSaveStatus('saving');
+      try {
+        const sessionId = await saveSession(sessionData);
+        if (sessionId) {
+          setSaveStatus('success');
+          setTimeout(() => setSaveStatus(null), 3000);
+        } else {
+          setSaveStatus('error');
+          setTimeout(() => setSaveStatus(null), 5000);
+        }
+      } catch (error) {
+        setSaveStatus('error');
+        console.error('Error saving session:', error);
+        setTimeout(() => setSaveStatus(null), 5000);
+      }
     }
     
-    // Also download as JSON file
     downloadSessionFile(sessionData);
   }, [buildSessionData, downloadSessionFile, saveSession]);
 
-  // Download session data without modifying state (for already-ended sessions)
   const downloadSessionData = useCallback(() => {
     const sessionData = buildSessionData();
     downloadSessionFile(sessionData);
   }, [buildSessionData, downloadSessionFile]);
 
-  // Timer logic for time mode
+  // Timer for time mode
   useEffect(() => {
     if (testConfig.mode === 'time' && sessionActive && timeRemaining !== null) {
       if (timeRemaining <= 0) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         endSession();
         return;
       }
@@ -212,211 +227,163 @@ function TypingTest() {
     }
   }, [testConfig.mode, sessionActive, timeRemaining, endSession]);
 
-  // Check word count completion for word mode
+  // Check word count completion
   useEffect(() => {
     if (testConfig.mode === 'words' && sessionActive) {
-      const targetChars = calculateTargetChars(testConfig.wordCount);
-      if (maxIndexReached >= targetChars) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+      const targetChars = testConfig.wordCount * 6;
+      if (maxIndexReachedRef.current >= targetChars) {
         endSession();
       }
     }
-  }, [testConfig.mode, testConfig.wordCount, sessionActive, maxIndexReached, endSession, calculateTargetChars]);
+  }, [testConfig.mode, testConfig.wordCount, sessionActive, currentIndex, endSession]);
 
-  // Handle key down event
+  // Optimized key handler - minimal state updates
   const handleKeyDown = useCallback((e) => {
-    // Resume audio context on first user interaction (required by browsers)
+    // Resume audio context on first user interaction
     if (currentUser?.settings.soundEnabled && !audioContextResumedRef.current) {
-      const resumed = resumeAudioContext();
-      // Only set to true if context is available and resume was initiated or already running
-      if (resumed) {
-        audioContextResumedRef.current = true;
+      try {
+        const resumed = resumeAudioContext();
+        if (resumed) {
+          audioContextResumedRef.current = true;
+          console.log('Audio context resumed successfully');
+        }
+      } catch (error) {
+        console.warn('Failed to resume audio context:', error);
       }
     }
     
-    // Prevent actions if we've completed the text (except in time mode where we generate more)
+    // Prevent actions if completed or session ended
     if (testConfig.mode === 'words' && currentIndex >= text.length) return;
-    
-    // Prevent actions if session ended (but allow starting new session)
     if (sessionStarted && !sessionActive) return;
     
-    // Start session on first keystroke
+    // Start session ONLY on first CORRECT character
     if (!sessionStarted) {
-      setSessionStarted(true);
-      setSessionActive(true);
-      sessionStartTimeRef.current = Date.now();
-      
-      // Initialize timer for time mode
-      if (testConfig.mode === 'time') {
-        setTimeRemaining(testConfig.timeLimit);
+      // Only start if typing the first character correctly
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const expectedChar = text[0];
+        if (e.key !== expectedChar) {
+          // Ignore - not the correct first character
+          e.preventDefault();
+          return;
+        }
+        // Correct first character - start session
+        setSessionStarted(true);
+        setSessionActive(true);
+        sessionStartTimeRef.current = Date.now();
+        
+        if (testConfig.mode === 'time') {
+          setTimeRemaining(testConfig.timeLimit);
+        }
+      } else {
+        // Not a printable character
+        e.preventDefault();
+        return;
       }
     }
 
-    // Update last keystroke time for every keystroke
     lastKeystrokeTimeRef.current = Date.now();
     
-    // Generate more text dynamically for time mode if getting close to end
+    // Generate more text for time mode
     if (testConfig.mode === 'time' && currentIndex > text.length - 50) {
-      const newData = initializeTextAndStates(wordsData, 50);
-      setText(prev => prev + ' ' + newData.text);
-      setCharStates(prev => [...prev, ...newData.charStates]);
+      const newText = generateText(50);
+      setText(prev => prev + ' ' + newText);
+      // Extend arrays
+      const currentLength = userInputRef.current.length;
+      userInputRef.current = [...userInputRef.current, ...new Array(newText.length + 1).fill(null)];
+      statusRef.current = [...statusRef.current, ...new Array(newText.length + 1).fill('pending')];
     }
 
-    const eventData = {
+    // Record keydown event and timestamp
+    const timestamp = Date.now();
+    eventsRef.current.push({
       type: 'keydown',
       key: e.key,
       code: e.code,
-      timestamp: Date.now(),
-      relativeTime: sessionStartTimeRef.current ? Date.now() - sessionStartTimeRef.current : 0,
-      currentIndex: currentIndex,
+      timestamp,
+      relativeTime: sessionStartTimeRef.current ? timestamp - sessionStartTimeRef.current : 0,
+      currentIndex,
       expectedChar: currentIndex < text.length ? text[currentIndex] : '',
-    };
+    });
+    
+    // Store keydown timestamp for dwell time calculation
+    keyDownTimestampsRef.current.set(e.key, timestamp);
 
-    setEvents(prev => [...prev, eventData]);
-
-    // Handle backspace (State 3: Correction)
+    // Handle backspace
     if (e.key === 'Backspace') {
       e.preventDefault();
       if (currentIndex > 0) {
-        // Don't reset character state - keep the original char and status history
-        // This allows State 4 logic to determine if it was a first attempt or re-type
         setCurrentIndex(prev => prev - 1);
-        // Count backspace in mechanical CPM (total keypresses)
-        setTotalKeystrokes(prev => prev + 1);
+        totalKeystrokesRef.current++;
+        triggerRender(); // Force re-render for active cursor position
       }
-    } 
+      return;
+    }
+    
     // Handle printable characters
-    else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       
-      // Count this keystroke for mechanical CPM
-      setTotalKeystrokes(prev => prev + 1);
+      totalKeystrokesRef.current++;
       
       const expectedChar = text[currentIndex];
       const isCorrect = e.key === expectedChar;
+      const isFirstAttempt = userInputRef.current[currentIndex] === null;
       
-      // Play sound based on correctness
+      // Play sound with error handling
       if (currentUser?.settings.soundEnabled) {
-        if (isCorrect) {
-          playCorrectSound();
-        } else {
-          playErrorSound();
+        try {
+          if (isCorrect) playCorrectSound();
+          else playErrorSound();
+        } catch (error) {
+          console.warn('Sound playback error:', error);
         }
       }
       
-      setCharStates(prev => {
-        const newStates = [...prev];
-        const currentState = newStates[currentIndex];
-        
-        // Check if this is the first time typing at this index
-        const isFirstAttempt = currentState.userBuffer === null;
-        
-        if (isFirstAttempt) {
-          // State 1 or State 2: First attempt at this position
-          if (isCorrect) {
-            // State 1: Correct Input
-            newStates[currentIndex] = {
-              ...currentState,
-              userBuffer: e.key,
-              status: 'correct'
-            };
-          } else {
-            // State 2: Incorrect Input
-            newStates[currentIndex] = {
-              ...currentState,
-              userBuffer: e.key,
-              status: 'incorrect'
-            };
-            // Track first-time error
-            setFirstTimeErrors(prev => new Set(prev).add(currentIndex));
-          }
-          // Update max index reached for productive CPM
-          setMaxIndexReached(prev => Math.max(prev, currentIndex + 1));
-        } else {
-          // State 4: Re-typing a correction (after backspace)
-          if (isCorrect) {
-            // Re-typed correctly - mark as corrected (orange)
-            newStates[currentIndex] = {
-              ...currentState,
-              userBuffer: e.key,
-              status: 'corrected'
-            };
-          } else {
-            // Re-typed incorrectly - mark as incorrect (red)
-            newStates[currentIndex] = {
-              ...currentState,
-              userBuffer: e.key,
-              status: 'incorrect'
-            };
-          }
-          // Don't update maxIndexReached for re-typing
-          // Don't add to firstTimeErrors (already tracked or not)
+      // Update refs directly (no state update needed)
+      userInputRef.current[currentIndex] = e.key;
+      
+      if (isFirstAttempt) {
+        statusRef.current[currentIndex] = isCorrect ? 'correct' : 'incorrect';
+        if (!isCorrect) {
+          firstTimeErrorsRef.current.add(currentIndex);
         }
-        
-        return newStates;
-      });
+        maxIndexReachedRef.current = Math.max(maxIndexReachedRef.current, currentIndex + 1);
+      } else {
+        statusRef.current[currentIndex] = isCorrect ? 'corrected' : 'incorrect';
+      }
       
       // Move to next character
       setCurrentIndex(prev => prev + 1);
-
-      // Check if we've reached the end of the text (after incrementing)
-      if (currentIndex + 1 >= text.length) {
-        // Don't auto-end session, just let the user end it manually
-        // The session remains active for the user to end it when ready
-      }
+      triggerRender(); // Force re-render to show updated character
     }
-  }, [sessionStarted, sessionActive, currentIndex, text, testConfig, currentUser]);
+  }, [sessionStarted, sessionActive, currentIndex, text, testConfig, currentUser, triggerRender]);
 
-  // Handle key up event
+  // Handle key up event for dwell time recording
   const handleKeyUp = useCallback((e) => {
     if (!sessionStartTimeRef.current) return;
 
-    const eventData = {
+    const timestamp = Date.now();
+    
+    // Record keyup event for dwell time analysis
+    eventsRef.current.push({
       type: 'keyup',
       key: e.key,
       code: e.code,
-      timestamp: Date.now(),
-      relativeTime: Date.now() - sessionStartTimeRef.current,
-      currentIndex: currentIndex,
+      timestamp,
+      relativeTime: timestamp - sessionStartTimeRef.current,
+      currentIndex,
       expectedChar: currentIndex < text.length ? text[currentIndex] : '',
-    };
-
-    setEvents(prev => [...prev, eventData]);
-  }, [currentIndex, text]);
-
-  // Render individual character with styling (Kinetic Tape Mode)
-  const renderCharacter = (charState, index) => {
-    let className = 'char';
-    // Display user's typed character if available, otherwise show expected character
-    const displayChar = charState.userBuffer || charState.char;
+    });
     
-    // Determine class based on status and position
-    if (index === currentIndex) {
-      // Active character - locked at focal point
-      className += ' active current';
-    } else if (charState.status === 'correct') {
-      className += ' correct';
-    } else if (charState.status === 'incorrect') {
-      className += ' incorrect';
-    } else if (charState.status === 'corrected') {
-      className += ' corrected';
-    } else if (charState.status === 'pending') {
-      // Pending character - not yet typed
-      className += ' pending';
-    }
-
-    return (
-      <span key={index} className={className}>
-        {displayChar}
-      </span>
-    );
-  };
+    // Clear keydown timestamp after recording keyup
+    keyDownTimestampsRef.current.delete(e.key);
+  }, [currentIndex, text]);
 
   // Setup keyboard event listeners
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-
+    
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
@@ -425,34 +392,48 @@ function TypingTest() {
 
   // Reset function
   const reset = () => {
-    // Generate new text for the configured mode
     const newWordCount = testConfig.mode === 'words' ? testConfig.wordCount : 200;
-    const newData = initializeTextAndStates(wordsData, newWordCount);
+    const newText = generateText(newWordCount);
     
-    // Reset to new text
-    setText(newData.text);
-    setCharStates(newData.charStates);
+    setText(newText);
     setCurrentIndex(0);
-    setEvents([]);
     setSessionActive(false);
     setSessionStarted(false);
     setTimeRemaining(null);
-    setTotalKeystrokes(0);
-    setMaxIndexReached(0);
-    setFirstTimeErrors(new Set());
+    
+    // Reset refs
+    userInputRef.current = new Array(newText.length).fill(null);
+    statusRef.current = new Array(newText.length).fill('pending');
+    eventsRef.current = [];
+    totalKeystrokesRef.current = 0;
+    maxIndexReachedRef.current = 0;
+    firstTimeErrorsRef.current = new Set();
+    keyDownTimestampsRef.current = new Map();
     sessionStartTimeRef.current = null;
     lastKeystrokeTimeRef.current = null;
+    
+    triggerRender();
   };
 
-  // Apply font settings from user profile
-  const getFontFamily = () => {
-    return currentUser?.settings.font || 'Courier New';
-  };
-  
+  // Font settings
+  const getFontFamily = () => currentUser?.settings.font || 'Courier New';
   const getFontSize = () => {
     const size = currentUser?.settings.fontSize || 'M';
     return size === 'S' ? '1.5rem' : size === 'L' ? '2.5rem' : '2rem';
   };
+
+  // Render characters - memoized
+  const renderedCharacters = useMemo(() => {
+    return text.split('').map((char, index) => (
+      <Character
+        key={index}
+        char={char}
+        userChar={userInputRef.current[index]}
+        status={statusRef.current[index]}
+        isActive={index === currentIndex}
+      />
+    ));
+  }, [text, currentIndex]); // Only re-create when text or currentIndex changes
 
   return (
     <div className="typing-test">
@@ -465,8 +446,8 @@ function TypingTest() {
                 <span className="timer">Time: {timeRemaining}s</span>
               )}
               <span>Index: {currentIndex}</span>
-              <span>Max Reached: {maxIndexReached}</span>
-              <span>Accuracy: {calculateAccuracy(maxIndexReached, firstTimeErrors)}%</span>
+              <span>Max Reached: {maxIndexReachedRef.current}</span>
+              <span>Accuracy: {calculateAccuracy(maxIndexReachedRef.current, firstTimeErrorsRef.current)}%</span>
               <span className={sessionActive ? 'active' : 'inactive'}>
                 {sessionActive ? '● Recording' : '○ Ended'}
               </span>
@@ -477,11 +458,81 @@ function TypingTest() {
 
       <ConfigBar />
 
+      <div className="inline-controls">
+        <button 
+          className="toggle-controls-btn"
+          onClick={() => setShowControls(!showControls)}
+          title="Toggle font and sound settings"
+        >
+          ⚙️ {showControls ? 'Hide' : 'Show'} Settings
+        </button>
+        
+        {showControls && (
+          <div className="controls-panel">
+            <div className="control-group">
+              <label htmlFor="font-select">Font:</label>
+              <select
+                id="font-select"
+                value={currentUser?.settings.font || 'Courier New'}
+                onChange={(e) => updateUserSettings({ font: e.target.value })}
+                className="font-select"
+              >
+                {availableFonts.length > 0 ? (
+                  availableFonts.map(font => (
+                    <option key={font.value} value={font.value}>
+                      {font.label}
+                    </option>
+                  ))
+                ) : (
+                  <option value="monospace">Loading fonts...</option>
+                )}
+              </select>
+            </div>
+            
+            <div className="control-group">
+              <label>Size:</label>
+              <div className="size-buttons">
+                <button
+                  className={currentUser?.settings.fontSize === 'S' ? 'active' : ''}
+                  onClick={() => updateUserSettings({ fontSize: 'S' })}
+                  title="Small font size"
+                >
+                  S
+                </button>
+                <button
+                  className={currentUser?.settings.fontSize === 'M' ? 'active' : ''}
+                  onClick={() => updateUserSettings({ fontSize: 'M' })}
+                  title="Medium font size"
+                >
+                  M
+                </button>
+                <button
+                  className={currentUser?.settings.fontSize === 'L' ? 'active' : ''}
+                  onClick={() => updateUserSettings({ fontSize: 'L' })}
+                  title="Large font size"
+                >
+                  L
+                </button>
+              </div>
+            </div>
+            
+            <div className="control-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={currentUser?.settings.soundEnabled || false}
+                  onChange={(e) => updateUserSettings({ soundEnabled: e.target.checked })}
+                />
+                <span style={{ marginLeft: '6px' }}>🔊 Sound</span>
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="text-container">
-        {/* Caret overlay - fixed at center (50%) */}
         <div className="caret-line"></div>
         
-        {/* Text track - moves horizontally to keep active char centered */}
         <div 
           ref={textDisplayRef}
           className="text-display" 
@@ -491,13 +542,13 @@ function TypingTest() {
             fontSize: getFontSize()
           }}
         >
-          {charStates.map((charState, index) => renderCharacter(charState, index))}
+          {renderedCharacters}
         </div>
       </div>
 
       <div className="instructions">
         {!sessionStarted ? (
-          <p>Start typing to begin the test. The timer starts on your first keystroke.</p>
+          <p>Start typing the first letter correctly to begin. The timer starts on your first correct keystroke.</p>
         ) : sessionActive ? (
           <p>Click "End Session" when you're done to save your results.</p>
         ) : (
@@ -514,6 +565,14 @@ function TypingTest() {
           <button onClick={downloadSessionData}>Download Session Data</button>
         )}
       </div>
+
+      {saveStatus && (
+        <div className={`save-notification ${saveStatus}`}>
+          {saveStatus === 'saving' && '💾 Saving session...'}
+          {saveStatus === 'success' && '✅ Session saved successfully!'}
+          {saveStatus === 'error' && '❌ Failed to save session. Data downloaded locally.'}
+        </div>
+      )}
     </div>
   );
 }

@@ -114,6 +114,13 @@ router.get('/:sessionId', (req, res) => {
 // Create a new session
 router.post('/', (req, res) => {
   try {
+    console.log('Received session creation request:', {
+      userId: req.body.userId,
+      mode: req.body.mode,
+      modeValue: req.body.modeValue,
+      timestamp: req.body.timestamp
+    });
+    
     const {
       userId,
       mode,
@@ -134,6 +141,17 @@ router.post('/', (req, res) => {
     if (!userId || !mode || modeValue === undefined || !text || !userInput || 
         !Array.isArray(events) || sessionDuration === undefined || 
         accuracy === undefined || !timestamp) {
+      console.error('Missing required fields in session creation:', {
+        userId: !!userId,
+        mode: !!mode,
+        modeValue: modeValue !== undefined,
+        text: !!text,
+        userInput: !!userInput,
+        events: Array.isArray(events),
+        sessionDuration: sessionDuration !== undefined,
+        accuracy: accuracy !== undefined,
+        timestamp: !!timestamp
+      });
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
@@ -196,6 +214,7 @@ router.post('/', (req, res) => {
       timestamp: session.timestamp
     };
     
+    console.log('Session created successfully:', sessionId);
     res.status(201).json(formattedSession);
   } catch (error) {
     console.error('Error creating session:', error);
